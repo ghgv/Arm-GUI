@@ -1,0 +1,22 @@
+# depslib dependency file v1.0
+1385316876 source:c:\users\german\documents\programacion\test\resource.rc
+	"wx/msw/wx.rc"
+
+1440558442 source:c:\users\german\documents\programacion\test\testapp.cpp
+	"wx_pch.h"
+	"testApp.h"
+	"testMain.h"
+
+1440558442 c:\users\german\documents\programacion\test\testapp.h
+	<wx/app.h>
+
+1440558442 c:\users\german\documents\programacion\test\testmain.h
+	<wx/wx.h>
+	"testApp.h"
+	<wx/button.h>
+	<wx/statline.h>
+
+1440558442 source:c:\users\german\documents\programacion\test\testmain.cpp
+	"wx_pch.h"
+	"testMain.h"
+
