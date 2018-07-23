@@ -13,6 +13,7 @@ class Bad : public QObject
     Q_OBJECT
 public:
     explicit Bad(QObject *parent = 0);
+    Bad(float angle,float height);
     int loader(char *name,unsigned long color,float offsetX, float offsetY,float offsetZ);
 
 
@@ -34,6 +35,8 @@ public:
     } __attribute__((__packed__));
 
      header head;
+     float Angle;
+     float Height;
      triangle *solid;
      float R,G,B;
      bool select=false;
@@ -43,12 +46,11 @@ public:
      float posX,posY,posZ;
      float deltaX,deltaY,deltaZ;
      float deltaX1,deltaY1,deltaZ1;
+     int idnumber;
 
      void draw();
 
-signals:
 
-public slots:
 };
 
 #endif // BAD_H

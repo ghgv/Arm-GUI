@@ -25,9 +25,13 @@
 ////////
 #include "bad.h"
 #include "GL/glu.h"
+#include "uarmext.h"
+
+#define farend 300
 
 extern long pos2;
-extern int posq;
+extern int cameraposZ;
+extern int posx;
 extern Bad *Gear2;
 extern Bad *main_gear;
 extern Bad *main_gear3;
@@ -53,8 +57,14 @@ extern Bad *secondtriangle;
 extern Bad *SG90;
 extern Bad *SG90holder;
 extern Bad *plane;
+extern Bad *esfera;
 
 extern float angle;
+float aspect;
+
+extern bool ORTHO;
+extern bool PROJECTED;
+
 GLfloat light0_ambient[] =  {0.4f, 0.4f, 0.4f, 1.0f};
 GLfloat light0_diffuse[] =  {1.0f, 1.0f, 1.0f, 1.0f};
 GLfloat light0_specular[]=  {1.0f, 1.0f, 1.0f, 1.0f};
@@ -114,7 +124,7 @@ void GLWidget::initializeGL()
                           //glEnable(GL_BLEND);
                          // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-                         */
+
 
 
                           glEnable(GL_MULTISAMPLE);
@@ -123,7 +133,7 @@ void GLWidget::initializeGL()
                             glGetIntegerv(GL_SAMPLE_BUFFERS, &bufs);
                             glGetIntegerv(GL_SAMPLES, &samples);
                             qDebug("Have %d buffers and %d samples", bufs, samples);
-
+ */
 
     glClearColor(0.70f, 0.8f, 0.8f, 1.0f);
     glEnable(GL_DEPTH_TEST);
@@ -148,7 +158,7 @@ void GLWidget::initializeGL()
 
 */
     // Create Shader (Do not release until VAO is created)
-        m_program = new QOpenGLShaderProgram(this);
+   /*     m_program = new QOpenGLShaderProgram(this);
         m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, vertexShaderSource);
         m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, fragmentShaderSource);
         m_program->link();
@@ -158,75 +168,53 @@ void GLWidget::initializeGL()
 
         m_program->release();
 
-
+*/
 
 }
 
 void GLWidget::paintGL()
 {
             glClear(GL_COLOR_BUFFER_BIT |GL_DEPTH_BUFFER_BIT);
+
+            ///////////////
+            int renderMode;
+            glGetIntegerv(GL_RENDER_MODE, &renderMode);
+
+
+        if (renderMode != GL_SELECT) {
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            gluPerspective(45.0, aspect, 1.0, 1500.0);
+        }
+        if(ORTHO==true){
+
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(-farend, farend, -farend, farend, 650.0f, -650.0f);
+        }
+        else{
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            gluPerspective(45.0, aspect, 1.0, 1500.0);
+        }
+
             glMatrixMode(GL_MODELVIEW);
             glLoadIdentity();
-            //gluLookAt(0,0,5, 0,0,0, 0,1,0 );
+            gluLookAt(0-posx,650-pos2,50+cameraposZ, 0-posx,0,50+cameraposZ, 0,0,1 );//pos2 is the depth of the camera from the UI
             glEnable(GL_DEPTH_TEST);
-            glOrtho(-10.0, 10.0, -10.0, 10.0, -10.0, 100.0);
             glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
             glEnable(GL_MULTISAMPLE);
             glEnable(GL_LINE_SMOOTH);
-            gluLookAt(-1.5, 1.0, 7.0,0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
-           // glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
-            glLoadIdentity();
-            angle =  (float) posq;
+
+
+            angle =  (float) posx;
             if (angle >= 360.0f)
             {
                     angle = 0.0f;
             }
-            glPushMatrix();
-            glLoadIdentity();
 
-
-            glTranslatef(0.0f, 0.0f, pos2-350);//pos 2=0
-            glRotatef(angle+260, 0.0f, 1.0f, 0.0f);
-
-            // printf("angle: %f, pos=%f\n",angle,pos2);
-            glRotatef(90, 1.0f, 0.0f, 0.0f);
-            glRotatef(90, 0.0f, 0.0f, 1.0f);
-            glRotatef(180,1.0f, 0.0f, 0.0f);
-////////////////
-
-            QMatrix4x4 matrix;
-                matrix.perspective(60.0f, 4.0f/3.0f, 0.1f, 100.0f);
-                matrix.translate(0, 0, -2);
-
-                m_program->setUniformValue(m_matrixUniform, matrix);
-
-                GLfloat vertices[] = {
-                    0.0f, 0.707f, 0.0f,
-                    -0.5f, -0.5f, 0.0f,
-                    0.5f, -0.5f, 0.0f
-                };
-
-                GLfloat colors[] = {
-                    1.0f, 0.0f, 0.0f,
-                    0.0f, 1.0f, 0.0f,
-                    0.0f, 0.0f, 1.0f
-                };
-
-                //glVertexAttribPointer(m_posAttr, 3, GL_FLOAT, GL_FALSE, 0, vertices);
-                //glVertexAttribPointer(m_colAttr, 3, GL_FLOAT, GL_FALSE, 0, colors);
-
-                //glEnableVertexAttribArray(0);
-                //glEnableVertexAttribArray(1);
-
-
-
-
-
-
-
-
-            ///////
-
+            if(DARM)
+            {
              Gear2->draw();
              main_gear->draw();
              main_gear3->draw();
@@ -247,18 +235,69 @@ void GLWidget::paintGL()
              left1->draw();
              rigth1->draw();
              palanca2->draw();
-            // sphere->draw();
+             sphere->draw();
              secondtriangle->draw();
              SG90->draw();
              SG90holder->draw();
-             plane->draw();
 
+            }
+             if(esfera!=NULL){
+                 esfera->draw();
+                 //qDebug()<<"in draw";
+             }
+            if(UARM)
+            {
+                base01->draw();
+                base02->draw();
+                base03->draw();
+                base05->draw();
+                base06->draw();
+                base07->draw();
+                base08->draw();
+                base09->draw();
+                base10->draw();
+                base11->draw();
+                base12->draw();
+                base13->draw();
+                base14->draw();
+                bearing->draw();
+                bearing_f5x9x012->draw();
+                board1->draw();
+                bolt->draw();
+                bolt22->draw();
+                bolt23->draw();
+                bolt27->draw();
+                bolt39->draw();
+                DJ001->draw();
+                DJ002->draw();
+                Dj9g->draw();
+                DP->draw();
+                DP001->draw();
+                DP002->draw();
+                link1->draw();
+                link2->draw();
+                link_3->draw();
+                link3->draw();
+                link004->draw();
+                link4->draw();
+                link005->draw();
+                link5->draw();
+                link006->draw();
+                link6->draw();
+                link7->draw();
+                link8->draw();
+                s1->draw();
+                s002->draw();
+                s2->draw();
+                STM4_22->draw();
+            }
+            plane->draw();
 
-
-             glPopMatrix();
+             //glPopMatrix();
              glFlush();
 
             update();
+
 }
 
 void GLWidget::resizeGL(int w, int h)
@@ -267,6 +306,7 @@ void GLWidget::resizeGL(int w, int h)
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(45.0, (float)w/h, 0.01 ,1500.0);
+    aspect=(float)w/h;
 
 }
 
@@ -280,6 +320,48 @@ void GLWidget::perspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdou
     xmin = ymin * aspect;
     xmax = ymax * aspect;
 
-    glFrustum( xmin, xmax, ymin, ymax, zNear, zFar );
+    //glFrustum( xmin, xmax, ymin, ymax, zNear, zFar );
 }
 
+void GLWidget::mousePressEvent(QMouseEvent* ev){
+    qDebug("mouse clicked\n");
+    qDebug()<<"x: "<< ev->x()<< " Y:"<<ev->y();
+    // Selection buffer
+    std::fill(selectBuffer.begin(), selectBuffer.end(), 0);
+    glSelectBuffer(selectBufferSize, &selectBuffer[0]);
+
+    // Draw for selection buffer
+    glRenderMode(GL_SELECT);
+
+    // Matrix setting
+    glMatrixMode(GL_PROJECTION);
+     glPushMatrix();
+        glLoadIdentity();
+        int viewport[4];
+        glGetIntegerv(GL_VIEWPORT, viewport);
+        gluPickMatrix(ev->x(), height() - ev->y(), 5, 5, viewport);
+        const float aspect = static_cast<float>(viewport[2]) / viewport[3];
+        gluPerspective(45.0, aspect, 1.0, 1500.0);
+
+        // Draw
+   //     paintGL();
+        // Reset matrix setting
+        glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+
+    // Revert render mode
+    int hits = glRenderMode(GL_RENDER);
+
+    // Show selection
+    qDebug()<<"hits "<< hits;
+    if (hits > 0) {
+        int id = 0;
+        for (int i = 0; i < hits; i++) {
+            printf("Level: %u\n", selectBuffer[id + 0]);
+            printf("  Min: %f\n", (double)selectBuffer[id + 1] / UINT_MAX);
+            printf("  Max: %f\n", (double)selectBuffer[id + 2] / UINT_MAX);
+            printf("   ID: %u\n", selectBuffer[id + 3]);
+            id += 4;
+        }
+    }
+}

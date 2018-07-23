@@ -1,23 +1,39 @@
 #include <QApplication>
+#include <QMessageBox>
+#include <stdio.h>
 #include "mainwindow.h"
+#include "joystick.h"
+#include "camino.h"
 #include "ui_mainwindow.h"
+#include "uarmext.h"
+
 #include <QSerialPort>
 #include <QTimer>
 #include <string.h>
-
+#include <Python.h>
+#include "helper.h"
 #include "bad.h"
 #include "loadfile.h"
 
 
 QSerialPort *serial;
+joystick *joy;
+extern camino *kamino;
 
 QString str;
 float yPOS=0;
 float xPOS=0;
 float zPOS=0;
+
+float X1,Y1,Z1;
+bool connected=0;
 float a1=0,b1=12,c1=12;
-#define ratio 4.0909
+
 bool feedbackb=false;
+bool ORTHO=true;
+bool PROJECTED;
+
+#define ratio 4.0909
 #define RED 0xFF3333
 #define GREEN 0x99FF33
 #define BLACK 0x0
@@ -25,8 +41,6 @@ bool feedbackb=false;
 #define WHITE 0xFFFFFF
 #define GRAY 0xC0C0C0
 #define BLUE 0x0000FF
-
-
 
 extern Bad *Gear2;
 extern Bad *main_gear;
@@ -53,16 +67,88 @@ extern Bad *secondtriangle;
 extern Bad *SG90;
 extern Bad *SG90holder;
 extern Bad *plane;
+extern Bad *esfera;
 
 
-extern int posq;
+extern int posx;
 extern int pos2;
+extern int cameraposZ;
 extern float degreeZ;
 std::string source;
 
 bool si = false;
 bool fin = false;
 FILE *outfile;
+
+
+
+
+static PyObject* uarm_foo(PyObject* self, PyObject* args)
+{
+    printf("... in C++...: foo() method\n");
+    return PyLong_FromLong(51);
+}
+
+static PyObject* uarm_show(PyObject* self, PyObject* args)
+{
+    PyObject *a;
+    if(PyArg_UnpackTuple(args, "", 1, 1, &a))
+    {
+        printf("C++: show(%ld)\n", PyLong_AsLong(a));
+    }
+    return PyLong_FromLong(0);
+}
+
+static PyObject* uarm_add(PyObject* self,PyObject* args)
+{
+    PyObject *a,*b,*c,*d;
+    char *s;
+    float x,y,z;
+
+    s=(char *)malloc(12);
+    if(PyArg_ParseTuple(args, "sfff",&s,&x,&y,&z))
+    {
+        printf("C++: a %s add(%f,%f,%f)\n",s,x,y,z);
+        esfera=new Bad();
+        esfera->loader(s,GREEN,x,y,z);
+    }
+    return PyLong_FromLong(0);
+
+}
+
+static PyObject* uarm_gears(PyObject* self,PyObject* args)
+{
+    float x,y,z;
+
+    if(PyArg_ParseTuple(args, "fff",&x,&y,&z))
+    {
+        printf("C++: uarm.gears(%f,%f,%f)\n",x,y,z);
+
+        xPOS=x-1;
+        yPOS=y-1;
+        zPOS=z-1;
+    }
+    return PyLong_FromLong(0);
+}
+
+static struct PyMethodDef methods[] = {
+    { "foo", uarm_foo, METH_VARARGS, "Returns the number"},
+    { "show", uarm_show, METH_VARARGS, "Show a number" },
+    { "add", uarm_add, METH_VARARGS, "Add an object" },
+    { "gears", uarm_gears, METH_VARARGS, "Move the gears certain angle" },
+    { NULL, NULL, 0, NULL }
+};
+
+static struct PyModuleDef modDef = {
+    PyModuleDef_HEAD_INIT, "uarm", NULL, -1, methods,
+    NULL, NULL, NULL, NULL
+};
+
+static PyObject* PyInit_uarm(void)
+{
+    return PyModule_Create(&modDef);
+}
+
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -74,10 +160,13 @@ MainWindow::MainWindow(QWidget *parent) :
     loadFile("position.pos",source);
 
 
+    joy = new joystick();
+    joy->start();
 
     serial= new QSerialPort(this);
     ui->lcdNumberX->setPalette(Qt::blue);
     ui->lcdNumberY->setPalette(Qt::blue);
+    ui->lcdNumberZ->setPalette(Qt::blue);
     str=ui->SPort->text();
     ui->espera->setText("150");
     serial->setPortName(str);
@@ -94,6 +183,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->SetZero,SIGNAL(pressed()),this,SLOT(setzero()));
     connect(ui->xmover, SIGNAL(valueChanged(int)),this, SLOT(xMover(int)));
     connect(ui->ymover, SIGNAL(valueChanged(int)),this, SLOT(yMover(int)));
+    connect(ui->zmover, SIGNAL(valueChanged(int)),this, SLOT(zMover(int)));
 
     connect(ui->UP, SIGNAL(pressed()),this, SLOT(yMoverU( )));
     connect(ui->DOWN, SIGNAL(pressed()),this, SLOT(yMoverD( )));
@@ -109,6 +199,18 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->grip, SIGNAL(valueChanged(int)),this, SLOT(Abrir_grip( int)));
     connect(ui->wrist, SIGNAL(valueChanged(int)),this, SLOT(Girar_writs(int  )));
+
+    connect(ui->CONNECT, SIGNAL(pressed()),this, SLOT(konnect( )));//Connect to a serial port
+
+    connect(joy, SIGNAL(up()),this, SLOT(yMoverU( )));
+    connect(joy, SIGNAL(down()),this, SLOT(yMoverD( )));
+    connect(joy, SIGNAL(right()),this, SLOT(zMoverU( )));
+    connect(joy, SIGNAL(left()),this, SLOT(zMoverD( )));
+    connect(joy, SIGNAL(front()),this, SLOT(xMoverU( )));//Front
+    connect(joy, SIGNAL(back()),this, SLOT(xMoverD( )));//Back
+
+    connect(ui->PYTHON, SIGNAL(pressed()),this, SLOT(python( )));//Back
+
 
     //Girar_wrist(0);
 
@@ -140,11 +242,57 @@ MainWindow::MainWindow(QWidget *parent) :
     bottom_plate->loader("bottom.stl",RED,-13.79333,33.5328,3.79485);//done
     left1->loader("left.stl",RED,-30.85771,26.58718,15.50329);//done
     rigth1->loader("rigth.stl",RED,21.32011,26.58718,15.50329 );//done
-    sphere->loader("sphere.stl",RED,0,0,0);
+    sphere->loader("sphere.stl",RED,0,1,0);
     secondtriangle->loader("secondtriangle.stl",GREEN,14.91295,143.89566,93.21524);//done
 
     SG90->loader("SG90.stl",BLUE,25.16291,186.04488,72.00875);//done
     SG90holder->loader("SG90holder.stl",YELLOW,19.18367,211.53325,93.99998);//done
+//////////////////from here on tthe uarm files
+    base01->loader("base01.stl",YELLOW,0,0,-113.68);//done
+    base02->loader("base02.stl",YELLOW,0,0,-113.68);//done
+    base03->loader("base03.stl",YELLOW,0,0,-113.68);//done
+    base05->loader("base05.stl",YELLOW,0,0,0);//done
+    base06->loader("base06.stl",YELLOW,0,0,0);//done
+    base07->loader("base07.stl",YELLOW,0,0,0);//done
+    base08->loader("base08.stl",YELLOW,0,0,0);//done
+    base09->loader("base09.stl",YELLOW,0,0,0);//done
+    base10->loader("base10.stl",YELLOW,0,0,0);//done
+    base11->loader("base11.stl",YELLOW,0,0,0);//done
+    base12->loader("base12.stl",YELLOW,0,0,0);//done
+    base13->loader("base13.stl",YELLOW,0,0,0);//done
+    base14->loader("base14.stl",YELLOW,0,0,0);//done
+    bearing->loader("bearing.stl",YELLOW,0,0,0);//done
+    bearing_f5x9x012->loader("bearing_f5x9x012.stl",YELLOW,0,0,0);//done
+    board1->loader("board1.stl",YELLOW,0,0,0);//done
+    bolt->loader("bolt.stl",YELLOW,0,0,0);//done
+    bolt22->loader("bolt22.stl",YELLOW,0,0,0);//done
+    bolt23->loader("bolt23.stl",YELLOW,0,0,0);//done
+    bolt27->loader("bolt27.stl",YELLOW,0,0,-113.680);//done
+    bolt39->loader("bolt39.stl",YELLOW,0,0,-113.680);//done
+    DJ001->loader("DJ001.stl",BLACK,0,0,-113.680);//done
+    DJ002->loader("DJ002.stl",BLACK,0,0,-113.680);//done
+    Dj9g->loader("Dj9g.stl",BLACK,0,0,0);//done
+    DP->loader("DP.stl",BLACK,0,0,0);//done
+    DP001->loader("DP001.stl",BLACK,0,0,0);//done
+    DP002->loader("DP002.stl",BLACK,0,0,0);//done
+    link1->loader("link1.stl",YELLOW,0,0,0);//done
+    link2->loader("link2.stl",YELLOW,0,0,0);//done
+    link_3->loader("link003.stl",YELLOW,0,0,0);//done
+    link3->loader("link3.stl",YELLOW,0,0,0);//done
+    link004->loader("link004.stl",YELLOW,0,0,0);//done
+    link4->loader("link4.stl",YELLOW,0,0,0);//done
+    link005->loader("link005.stl",YELLOW,0,0,0);//done
+    link5->loader("link5.stl",YELLOW,0,0,0);//done
+    link006->loader("link006.stl",YELLOW,0,0,0);//done
+    link6->loader("link6.stl",YELLOW,0,0,0);//done
+    link7->loader("link7.stl",YELLOW,0,0,0);//done
+    link8->loader("link8.stl",YELLOW,0,0,0);//done
+    s1->loader("s1.stl",YELLOW,0,0,0);//done
+    s002->loader("s002.stl",YELLOW,0,0,0);//done
+    s2->loader("s2.stl",YELLOW,0,0,0);//done
+    STM4_22->loader("STM4_22.stl",YELLOW,0,0,0);//done
+//////////////////////////
+
 
    // mover(source);
 }
@@ -240,7 +388,7 @@ void MainWindow::setzero()
 void MainWindow::xMover(int x)
 {
     QString s= QString::number((float)x/1);
-    posq=(float) x;
+    posx=(float) x;
     s="pos X "+s+"\r";
    // serial->write(s.toStdString().c_str());
     ui->lcdNumberX->display((double)x/10);
@@ -254,10 +402,17 @@ void MainWindow::yMover(int y) // Moves away
     printf("%f\n",pos2);
    // s="pos Y "+s+"\r";
    // serial->write(s.toStdString().c_str());
-    serial->flush();
+    //serial->flush();
     ui->lcdNumberY->display((double)(y));
 
 }
+
+void MainWindow::zMover(int z)
+{
+    cameraposZ=(float)z;
+    ui->lcdNumberZ->display((double)(z));
+}
+
 
 void MainWindow::yMoverU() //UP
 {
@@ -266,30 +421,46 @@ void MainWindow::yMoverU() //UP
     QString s= QString::number((float)yPOS);
     std::cout << "In yMoverU "<<std::endl;
     s="pos Y "+s+"\r";
-    //posq=yPOS*2;
+
     small_gear2->degree=yPOS*ratio;
     Gear2->degree=-yPOS;
-    horizontal->degree=Gear2->degree;
-    palanca2->degree=Gear2->degree;
-    arm1->degree=horizontal->degree;
+    horizontal->degree=Gear2->degree;//link3 y link004
+    palanca2->degree=Gear2->degree;//link2 y link_3
+    arm1->degree=horizontal->degree;//link6
+    arm2->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);//link7
+    arm2->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);//link7
+    secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+    secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+    SG90->deltaY=secondtriangle->deltaY;//Dj9g
+    SG90->deltaZ=secondtriangle->deltaZ;//Dj9g
+    SG90holder->deltaY=secondtriangle->deltaY;//board1
+    SG90holder->deltaZ=secondtriangle->deltaZ;//board1
 
-    arm2->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);
-    arm2->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);
 
-    secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;
-    secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;
 
-    SG90->deltaY=secondtriangle->deltaY;
-    SG90->deltaZ=secondtriangle->deltaZ;
-    SG90holder->deltaY=secondtriangle->deltaY;
-    SG90holder->deltaZ=secondtriangle->deltaZ;
+        link3->degree=Gear2->degree;//link3 y link004
+        link004->degree=Gear2->degree;//link3 y link004
+        link2->degree=Gear2->degree;//link2 y link_3
+        link3->degree=Gear2->degree;//link2 y link_3
+        link6->degree=horizontal->degree;//link6
+        link7->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);//link7
+        link7->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);//link7
+        link005->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+        link5->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+        link005->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+        link5->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+        Dj9g->deltaY=secondtriangle->deltaY;//Dj9g
+        Dj9g->deltaZ=secondtriangle->deltaZ;//Dj9g
+        board1->deltaY=secondtriangle->deltaY;//board1
+        board1->deltaZ=secondtriangle->deltaZ;//board1
+
 
 
     serial->write(s.toStdString().c_str());
     serial->flush();
 
     ui->plainTextEdit->insertPlainText(s);
-    ui->lcdNumberY->display((double)(yPOS/10));
+    ui->lcdL->display((double)(yPOS));
 }
 
 void MainWindow::yMoverD() //DOWN
@@ -304,25 +475,37 @@ void MainWindow::yMoverD() //DOWN
     horizontal->degree=Gear2->degree;
     palanca2->degree=Gear2->degree;
     arm1->degree=horizontal->degree;
-
     arm2->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);
     arm2->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);
-
     secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;
     secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;
-
-
     SG90->deltaY=secondtriangle->deltaY;
     SG90->deltaZ=secondtriangle->deltaZ;
     SG90holder->deltaY=secondtriangle->deltaY;
     SG90holder->deltaZ=secondtriangle->deltaZ;
+
+    link3->degree=Gear2->degree;//link3 y link004
+    link004->degree=Gear2->degree;//link3 y link004
+    link2->degree=Gear2->degree;//link2 y link_3
+    link3->degree=Gear2->degree;//link2 y link_3
+    link6->degree=horizontal->degree;//link6
+    link7->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);//link7
+    link7->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);//link7
+    link005->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+    link5->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+    link005->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+    link5->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+    Dj9g->deltaY=secondtriangle->deltaY;//Dj9g
+    Dj9g->deltaZ=secondtriangle->deltaZ;//Dj9g
+    board1->deltaY=secondtriangle->deltaY;//board1
+    board1->deltaZ=secondtriangle->deltaZ;//board
 
     serial->write(s.toStdString().c_str());
     serial->waitForBytesWritten(-1);
     serial->flush();
 
     ui->plainTextEdit->insertPlainText(s);
-    ui->lcdNumberY->display((double)(yPOS));
+    ui->lcdL->display((double)(yPOS));
 }
 
 void MainWindow::xMoverU()  //FRONT
@@ -346,24 +529,22 @@ void MainWindow::xMoverU()  //FRONT
     arm2->degree=arm3->degree;
 
     arm1->deltaY=horizontal->deltaY;
-   arm1->deltaZ=horizontal->deltaZ;
+    arm1->deltaZ=horizontal->deltaZ;
 
-   secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;
-   secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;
+    secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;
+    secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;
 
-
-
-   SG90->deltaY=secondtriangle->deltaY;
-   SG90->deltaZ=secondtriangle->deltaZ;
-   SG90holder->deltaY=secondtriangle->deltaY;
-   SG90holder->deltaZ=secondtriangle->deltaZ;
+    SG90->deltaY=secondtriangle->deltaY;
+    SG90->deltaZ=secondtriangle->deltaZ;
+    SG90holder->deltaY=secondtriangle->deltaY;
+    SG90holder->deltaZ=secondtriangle->deltaZ;
 
     serial->write(s.toStdString().c_str());
     serial->waitForBytesWritten(-1);
     serial->flush();
 
     ui->plainTextEdit->insertPlainText(s);
-    ui->lcdNumberY->display((double)(xPOS/10));
+    ui->lcdR->display((double)(xPOS));
 }
 
 void MainWindow::xMoverD() //BACK
@@ -403,7 +584,7 @@ void MainWindow::xMoverD() //BACK
     serial->write(s.toStdString().c_str());
     serial->waitForBytesWritten(-1);
     ui->plainTextEdit->insertPlainText(s);
-    ui->lcdNumberY->display((double)(xPOS/10));
+    ui->lcdR->display((double)(xPOS));
 }
 
 void MainWindow::zMoverU()
@@ -433,6 +614,7 @@ void MainWindow::zMoverU()
     main_gear->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90holder->degreeZ=upper_triangle->degreeZ=degreeZ;
+    ui->lcdZ->display((double)(zPOS));
 }
 
 void MainWindow::zMoverD() //Moves the object around Z
@@ -463,6 +645,8 @@ void MainWindow::zMoverD() //Moves the object around Z
 
     SG90->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90holder->degreeZ=upper_triangle->degreeZ=degreeZ;
+
+    ui->lcdZ->display((double)(zPOS));
  }
 
 void MainWindow::updateg()
@@ -489,65 +673,142 @@ void MainWindow::updateg2()
 }
 
 
-void MainWindow::feedbacks()
+void MainWindow::feedbacks()// This was diosabled in darm
 {
     feedbackb=!feedbackb;
 }
 
 void MainWindow::calculate()
 {
-   float x,y,y1,z,alpha,beta,gamma,m,l,c,n,phi,s,theta;
+   float x,y,z,alpha,beta,gamma,m,l,c,n,phi,s,theta;
    QString str;
    l=12;
    a1=0;b1=12;c1=12;
 
+   float x0,y0,z0,a1,b1,c1,t,x1,y1,z1,m1;//http://tutorial.math.lamar.edu/Classes/CalcIII/EqnsOfLines.aspx
+
+   x0=(float) X1;
+   y0=(float) Y1;
+   z0=(float) Z1;
+
    str=ui->X->toPlainText();
    x=str.toDouble();
 
-
    str=ui->Y->toPlainText();
    y=str.toDouble();
+
    str=ui->Z->toPlainText();
    z=str.toDouble();
 
-   s=sqrt(x*x+y*y);
-   theta=atan(y/x);
-   //// Then change y by s
-   m=sqrt(s*s+z*z);
+   a1=x0-x;
+   b1=y0-y;
+   c1=z0-z;
 
+   t=(-x1-x0)/a1;//parametrizaion
 
+   qDebug()<<"a= "<<a1;
+   qDebug()<<"b= "<<b1;
+   qDebug()<<"c= "<<c1;
+   qDebug()<<"t= "<<t;
 
-   alpha=acos(m/(2*l));
+   if(t>0){
+       for(m1=0;m1<t;m1=m1+0.1)
+       {
+           x=x0-a1*m1;
+           y=y0-b1*m1;
+           z=z0-c1*m1;
 
-   //QString M = QString::number(alpha*180/3.1416);
-   //ui->m->setText(M);
-   gamma=atan(z/s);
-   beta=3.1416/2-alpha-gamma;
-   c=3.1416/2-beta;
-   phi=acos((m*m-2*l*l)/(-2*l*l));
+            X1=x;
+            Y1=y;
+            Z1=z;
 
-   n=-(3.1416-c-phi);
-   QString BETA = QString::number(beta*180/3.1416);
-   QString ALPHA = QString::number(n*180/3.1416);
-   QString GAMMA = QString::number(gamma*180/3.1416);
-   QString PHI = QString::number(phi*180/3.1416);
-   QString THETA =QString::number(90-theta*180/3.1416);
-   QString S =QString::number(s);
-   QString M = QString::number(m);
-   ui->alpha->setText(ALPHA);
-   ui->beta->setText(BETA);
-   ui->gamma->setText(GAMMA);
-   ui->theta->setText(THETA);
-   ui->m->setText(M);
-   ui->s->setText(S);
-   ui->phi->setText(PHI);
-   xPOS=-beta*180/(3.1416);
-   yPOS=-n*180/(3.1416);
-   zPOS=90-theta*180/3.1416;
-   xMoverD();
-   yMoverD();
-   zMoverD();
-   ui->lcdNumberY->display((double)(xPOS));
+           s=sqrt(x*x+y*y);
+           theta=atan(y/x);
+           //// Then change y by s
+           m=sqrt(s*s+z*z);
+
+           alpha=acos(m/(2*l));
+           gamma=atan(z/s);
+           beta=3.1416/2-alpha-gamma;
+           c=3.1416/2-beta;
+           phi=acos((m*m-2*l*l)/(-2*l*l));
+           n=-(3.1416-c-phi);
+           QString BETA = QString::number(beta*180/3.1416);
+           QString ALPHA = QString::number(n*180/3.1416);
+           QString GAMMA = QString::number(gamma*180/3.1416);
+           QString PHI = QString::number(phi*180/3.1416);
+           QString THETA =QString::number(90-theta*180/3.1416);
+           QString S =QString::number(s);
+           QString M = QString::number(m);
+           ui->alpha->setText(ALPHA);
+           ui->beta->setText(BETA);
+           ui->gamma->setText(GAMMA);
+           ui->theta->setText(THETA);
+           ui->m->setText(M);
+           ui->s->setText(S);
+           ui->phi->setText(PHI);
+           xPOS=-beta*180/(3.1416);
+           yPOS=-n*180/(3.1416);
+           zPOS=90-theta*180/3.1416;
+           qDebug()<<"m= "<<m;
+           xMoverD();
+           yMoverD();
+           zMoverD();
+
+           //ui->lcdNumberY->display((double)(xPOS));
+
+       }
+   }
+   else
+   {
+       for(m1=t;m1>0;m1=m1+0.1)
+       {
+           x=x0-a1*m1;
+           y=y0-b1*m1;
+           z=z0-c1*m1;
+
+           X1=x;
+           Y1=y;
+           Z1=z;
+
+           s=sqrt(x*x+y*y);
+           theta=atan(y/x);
+           //// Then change y by s
+           m=sqrt(s*s+z*z);
+
+           alpha=acos(m/(2*l));
+           gamma=atan(z/s);
+           beta=3.1416/2-alpha-gamma;
+           c=3.1416/2-beta;
+           phi=acos((m*m-2*l*l)/(-2*l*l));
+           n=-(3.1416-c-phi);
+           QString BETA = QString::number(beta*180/3.1416);
+           QString ALPHA = QString::number(n*180/3.1416);
+           QString GAMMA = QString::number(gamma*180/3.1416);
+           QString PHI = QString::number(phi*180/3.1416);
+           QString THETA =QString::number(90-theta*180/3.1416);
+           QString S =QString::number(s);
+           QString M = QString::number(m);
+           ui->alpha->setText(ALPHA);
+           ui->beta->setText(BETA);
+           ui->gamma->setText(GAMMA);
+           ui->theta->setText(THETA);
+           ui->m->setText(M);
+           ui->s->setText(S);
+           ui->phi->setText(PHI);
+           xPOS=-beta*180/(3.1416);
+           yPOS=-n*180/(3.1416);
+           zPOS=90-theta*180/3.1416;
+           qDebug()<<"m= "<<m;
+           xMoverD();
+           yMoverD();
+           zMoverD();
+
+           //ui->lcdNumberY->display((double)(xPOS));
+
+       }
+
+   }
 
 }
 
@@ -737,4 +998,76 @@ void MainWindow::Girar_wrist(int a)
     ui->plainTextEdit->insertPlainText(s);
 
 
+}
+
+void MainWindow::konnect()//connect
+{
+    if(connected==1){
+        serial->close();
+        ui->CONNECT->setText("Disconnected");
+        connected=0;
+    }
+    else
+    {
+        serial->setPortName(str);
+        serial->setBaudRate(QSerialPort::Baud57600);
+        serial->setDataBits(QSerialPort::Data8);
+        serial->setParity(QSerialPort::NoParity);
+        serial->setStopBits(QSerialPort::OneStop);
+        serial->setFlowControl(QSerialPort::NoFlowControl);
+        serial->open(QIODevice::ReadWrite);
+        ui->CONNECT->setText("Connected");
+        connected=1;
+    }
+}
+
+void MainWindow::python()
+{
+
+
+    Py_SetPythonHome(L"C:\\Python34");
+
+    kamino->show();
+    PyImport_AppendInittab("uarm", &PyInit_uarm);
+
+        CPyInstance hInstance;
+
+        const char pFile[] = "C:\\Users\\German\\Documents\\programacion\\build-test-Desktop_Qt_5_9_1_MinGW_32bit-Debug\\debug\\pyemb6.py";
+        FILE* fp = _Py_fopen(pFile, "r");
+        if(fp==NULL)
+             std::cout<<"file not found";
+        else
+          PyRun_AnyFile(fp, pFile);
+
+
+}
+
+void MainWindow::on_UARM_clicked()
+{
+    UARM=true;
+    DARM=false;
+}
+
+void MainWindow::on_DARM_clicked()
+{
+    UARM=false;
+    DARM=true;
+}
+
+void MainWindow::on_ORTHO_clicked()
+{
+    ORTHO=true;
+    PROJECTED=false;
+}
+
+void MainWindow::on_PROJECTED_clicked()
+{
+    ORTHO=false;
+    PROJECTED=true;
+}
+
+void MainWindow::execute(){
+    yMoverU();
+    zMoverU();
+    qApp->processEvents();
 }

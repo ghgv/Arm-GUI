@@ -2,11 +2,16 @@
 #define CAMINO_H
 
 #include <QObject>
+#include <QString>
 
 class camino
 {
+
+
 public:
-    camino();
+    QString path;
+    camino(QString a);
+    void show();
 };
 
 #endif // CAMINO_H

@@ -6,24 +6,37 @@
 
 QT       += core gui opengl serialport
 
+
+CONFIG += no_keywords
+
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = test
 TEMPLATE = app
 
 
-LIBS += -LC:/Qt/5.6/mingw492_32/lib/libQt4OpenGL.a -lopengl32 -lglu32
+LIBS += -LC:/Qt/5.6/mingw492_32/lib/libQt4OpenGL.a -lopengl32 -lglu32 -LC:\SDL2\lib\x86 -lSDL2 -LC:\Python34\libs -lpython34
+
+INCLUDEPATH += C:\SDL2\include C:\Python34\include
 
 SOURCES += main.cpp\
         mainwindow.cpp \
     glwidget.cpp \
     loadfile.cpp \
-    bad.cpp
+    bad.cpp \
+    joystick.cpp \
+    helper.cpp \
+    camino.cpp
 
 HEADERS  += mainwindow.h \
     glwidget.h \
     loadfile.h \
-    bad.h
+    bad.h \
+    joystick.h \
+    helper.h \
+    camino.h \
+    uarm.h \
+    uarmext.h
 
 FORMS    += mainwindow.ui
 

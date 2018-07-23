@@ -12,6 +12,7 @@
 
 
 extern QString pathStr;
+extern int solidos;
 
 
 using namespace std;
@@ -21,35 +22,42 @@ Bad::Bad(QObject *parent) : QObject(parent)
   //head=(Bad::header *)malloc(sizeof(header));
 }
 
+Bad::Bad(float angle,float height){
+ this->Angle=angle;
+ this->Height=height;
+}
 
 int Bad::loader(char *name,unsigned long color,float offsetX, float offsetY,float offsetZ)
 {
 
-QMessageBox msgBox;
-char * memblock;
-char * memblock2;
-int j;
+    QMessageBox msgBox;
+    char * memblock;
+    char * memblock2;
+    int j;
 
-R=(color>>16);
-G=(color>>8) & (0x0000FF);
-B=(color&0x0000FF);
+    R=(color>>16);
+    G=(color>>8) & (0x0000FF);
+    B=(color&0x0000FF);
 
-offX=offsetX;
-offY=offsetY;
-offZ=offsetZ;
+    offX=offsetX;
+    offY=offsetY;
+    offZ=offsetZ-Height;
 
-deltaX=0;
-deltaY=0;
-deltaZ=0;
+    deltaX=0;
+    deltaY=0;
+    deltaZ=0;
 
-deltaX1=0;
-deltaY1=0;
-deltaZ1=0;
+    deltaX1=0;
+    deltaY1=0;
+    deltaZ1=0;
+
+    degree=Angle;
+    degreeZ=0;
 
     QString str=name;
     QFile Source_file;
-    //QString fileOut = "C:/Users/German/Documents/programacion/test/bin/Release/" + str;
     QString fileOut = "C:/Users/German/Documents/programacion/build-test-Desktop_Qt_5_6_2_MinGW_32bit-Debug/debug/" + str;
+
     Source_file.setFileName(fileOut);
     if (Source_file.open(QIODevice::ReadOnly)) {
                 qint32 intb;
@@ -67,6 +75,7 @@ deltaZ1=0;
                   cout << "Num triangles " << a <<endl;
                   solid=(triangle *)malloc(head.number_of_triangles*sizeof(triangle));
                   memcpy(solid, memblock2+sizeof(header), head.number_of_triangles*sizeof(triangle));
+                  idnumber=solidos++;
 
             }
     triangle *old_solid;
@@ -90,9 +99,10 @@ return 0;
 
 void Bad::draw()
 {
+    glLoadName(idnumber);
+   // qDebug()<<"Solid id: "<<idnumber<<"\n";
     triangle *old_solid;
     old_solid=solid;
-    int j;
 
     glColor3f(R/255, G/255, B/255);
     GLfloat qaBlack[]= {0,0,0,1};
@@ -103,14 +113,8 @@ void Bad::draw()
     glMaterialfv(GL_FRONT,GL_DIFFUSE,qaGreen);
     glMaterialfv(GL_FRONT,GL_SPECULAR,qaWhite);
     glMaterialf(GL_FRONT,GL_SHININESS,60.0);
-
-
-
-        //if(select==true)
-        {
-            glMatrixMode(GL_MODELVIEW);
-
-            glPushMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
             glRotatef(degreeZ,0,0,1);
             glTranslatef(deltaX+deltaX1, deltaY+deltaY1, deltaZ+deltaZ1);
 
@@ -118,52 +122,20 @@ void Bad::draw()
             glRotatef(degree,1,0,0);
             glTranslatef(-offX, -offY, -offZ); //move object to center
 
-        }
-
-
-
 
 
     glBegin(GL_TRIANGLES);
-
-   for(j=0;j<head.number_of_triangles;j++)
+    for(int j=0;j<head.number_of_triangles;j++)
         {
         glNormal3f(solid->Normal[0],solid->Normal[1],solid->Normal[2]);
-       // printf("Normal[%i] %f %f %f\n",j,solid->Normal[0],solid->Normal[1],solid->Normal[2]);
-        glVertex3f(solid->Vertex1[0],solid->Vertex1[1],solid->Vertex1[2]);
-       // printf("V1[%i] %f %f %f\n",j,solid->Vertex1[0],solid->Vertex1[1],solid->Vertex1[2]);
-        glVertex3f(solid->Vertex2[0],solid->Vertex2[1],solid->Vertex2[2]);
-       // printf("V2[%i] %f %f %f\n",j,solid->Vertex2[0],solid->Vertex2[1],solid->Vertex2[2]);
-        glVertex3f(solid->Vertex3[0],solid->Vertex3[1],solid->Vertex3[2]);
-       // printf("V3[%i] %f %f %f\n",j,solid->Vertex3[0],solid->Vertex3[1],solid->Vertex3[2]);
+        glVertex3f(solid->Vertex1[0]+posX,solid->Vertex1[1]+posY,solid->Vertex1[2]);
+        glVertex3f(solid->Vertex2[0]+posX,solid->Vertex2[1]+posY,solid->Vertex2[2]);
+        glVertex3f(solid->Vertex3[0]+posX,solid->Vertex3[1]+posY,solid->Vertex3[2]);
         solid++;
-
         }
-
-
-/*
-    for(j=0;j<head.number_of_triangles;j++)
-        {
-        glNormal3f(solid->Normal[0],solid->Normal[1],solid->Normal[2]);
-       // printf("Normal[%i] %f %f %f\n",j,solid->Normal[0],solid->Normal[1],solid->Normal[2]);
-        glVertex3f(solid->Vertex1[0]+deltaX,solid->Vertex1[1]+deltaY,solid->Vertex1[2]+deltaZ);
-       // printf("V1[%i] %f %f %f\n",j,solid->Vertex1[0],solid->Vertex1[1],solid->Vertex1[2]);
-        glVertex3f(solid->Vertex2[0]+deltaX,solid->Vertex2[1]+deltaY,solid->Vertex2[2]+deltaZ);
-       // printf("V2[%i] %f %f %f\n",j,solid->Vertex2[0],solid->Vertex2[1],solid->Vertex2[2]);
-        glVertex3f(solid->Vertex3[0]+deltaX,solid->Vertex3[1]+deltaY,solid->Vertex3[2]+deltaZ);
-       // printf("V3[%i] %f %f %f\n",j,solid->Vertex3[0],solid->Vertex3[1],solid->Vertex3[2]);
-        solid++;
-
-        }
-*/
 
         glEnd();
-       // if(select==true)
-        {
-
-               glPopMatrix();
-        }
+        glPopMatrix();
         solid=old_solid;
-        //exit(0);
 
 }

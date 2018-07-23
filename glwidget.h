@@ -21,7 +21,11 @@ setFormat(QSurfaceFormat::defaultFormat());
     void paintGL();
     void resizeGL(int w, int h);
     void perspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar);
-
+    void mousePressEvent(QMouseEvent* ev) override;
+private:
+    using uint = unsigned int;
+    static const int selectBufferSize = 100;
+    std::vector<uint> selectBuffer = std::vector<uint>(selectBufferSize);
     //////////
     GLuint m_posAttr;
         GLuint m_colAttr;

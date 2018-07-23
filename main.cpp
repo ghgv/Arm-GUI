@@ -1,7 +1,11 @@
 #include "mainwindow.h"
 #include "loadfile.h"
 #include "bad.h"
+#include "camino.h"
+#include "uarm.h"
+
 #include <QApplication>
+#include <stdio.h>
 #include <QOpenGLWidget>
 #include <QGLFormat>
 //#include <QtDeclarative/qdeclarativeview.h>
@@ -48,12 +52,18 @@ Bad *secondtriangle = new Bad();
 Bad *SG90 = new Bad();
 Bad *SG90holder = new Bad();
 Bad *plane = new Bad();
+Bad *esfera;
 
 
-int posq;
+int posx;
 int pos2;
+int cameraposZ;
+int solidos=0;
+
+bool UARM=true, DARM=false;
 
 float degreeZ;
+camino *kamino;
 
 
 int main(int argc, char *argv[])
@@ -63,7 +73,12 @@ int main(int argc, char *argv[])
 
     QApplication a(argc, argv);
     MainWindow w;
+
     pathStr= a.applicationDirPath();
+
+    kamino= new camino(pathStr);
+
+
 
 
     QSurfaceFormat format;

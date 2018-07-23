@@ -16,8 +16,9 @@ public:
     ~MainWindow();
     uint8_t argc, i = 0;
     char *argv[30];
+    void execute();
 
-private slots:
+private Q_SLOTS:
     void parse(char *cmd);
     int serialreceived();
     int received();
@@ -27,6 +28,7 @@ private slots:
     void serialM18();
     void xMover(int);
     void yMover(int);
+    void zMover(int);
     void Girar_wrist(int);
     void Abrir_grip(int);
     void yMoverU();
@@ -42,6 +44,16 @@ private slots:
     void Mover();
     void mover(std::string& );
     void actuator(float ,float ,float );
+    void konnect();
+    void python();
+    void on_UARM_clicked();
+
+    void on_DARM_clicked();
+
+    void on_ORTHO_clicked();
+
+    void on_PROJECTED_clicked();
+
 private:
     Ui::MainWindow *ui;
 };
