@@ -13,15 +13,19 @@ public:
     GLWidget(QWidget* parent) :
         QOpenGLWidget(parent)
     {
-setFormat(QSurfaceFormat::defaultFormat());
+        QSurfaceFormat format;
+            format.setSamples(8);    // These three lines enable the antialiasing
+            setFormat(format);
+
     }
-  // QGLWidget::setFormat(QGLFormat(QGL::SampleBuffers));
+
 
     void initializeGL();
     void paintGL();
     void resizeGL(int w, int h);
     void perspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar);
     void mousePressEvent(QMouseEvent* ev) override;
+    void glStencilFunc();
 private:
     using uint = unsigned int;
     static const int selectBufferSize = 100;

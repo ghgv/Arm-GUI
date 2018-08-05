@@ -1,7 +1,9 @@
+#include <QDebug>
 #include "helper.h"
 extern int xPOS;
 extern int yPOS;
 extern int zPOS;
+
 
 static PyObject* uarm_foo(PyObject* self, PyObject* args)
 {
@@ -16,7 +18,6 @@ static PyObject* uarm_show(PyObject* self, PyObject* args)
     {
         printf("C++: show(%ld)\n", PyLong_AsLong(a));
     }
-
     return PyLong_FromLong(0);
 }
 
@@ -32,9 +33,7 @@ static PyObject* uarm_add(PyObject* self,PyObject* args)
         printf("C++: a %s add(%f,%f,%f)\n",s,x,y,z);
         //esfera=new Bad();
         //esfera->loader(s,GREEN,x,y,z);
-
     }
-
     return PyLong_FromLong(0);
 
 }
@@ -46,10 +45,11 @@ static PyObject* uarm_gears(PyObject* self,PyObject* args)
     if(PyArg_ParseTuple(args, "fff",&x,&y,&z))
     {
         printf("C++: uarm.gears(%f,%f,%f)\n",x,y,z);
-
+        qDebug()<<" uarms";
         xPOS=x-1;
         yPOS=y-1;
         zPOS=z-1;
+
     }
     return PyLong_FromLong(0);
 }
@@ -67,7 +67,6 @@ static struct PyModuleDef modDef = {
     NULL, NULL, NULL, NULL
 };
 
-static PyObject* PyInit_uarm(void)
-{
-    return PyModule_Create(&modDef);
-}
+
+
+

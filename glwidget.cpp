@@ -61,6 +61,7 @@ extern Bad *esfera;
 
 extern float angle;
 float aspect;
+extern bool rtopview;
 
 extern bool ORTHO;
 extern bool PROJECTED;
@@ -102,12 +103,14 @@ void GLWidget::initializeGL()
                           glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER,GL_TRUE);
                           glEnable(GL_LIGHTING);
                           glEnable(GL_LIGHT0);
+                          glEnable(GL_MULTISAMPLE);
                           glLightfv(GL_LIGHT0, GL_AMBIENT, light0_ambient);
                           glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_diffuse);
                           glLightfv(GL_LIGHT0, GL_SPECULAR, light0_specular);
                           glLightfv(GL_LIGHT0, GL_POSITION, light0_position);
-                          glEnable(GL_DEPTH_TEST);
+                          //glEnable(GL_DEPTH_TEST);
                           glEnable(GL_COLOR_MATERIAL);
+
 
 /*
                           glClearColor(0,0,0,1);
@@ -136,7 +139,17 @@ void GLWidget::initializeGL()
  */
 
     glClearColor(0.70f, 0.8f, 0.8f, 1.0f);
+    glEnable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+    glEnable(GL_MULTISAMPLE);
+    //glHint( GL_LINE_SMOOTH_HINT, GL_NICEST );
+    glHint(GL_MULTISAMPLE_FILTER_HINT_NV, GL_NICEST);
+       // glHint( GL_POLYGON_SMOOTH_HINT, GL_NICEST );
+        glDisable( GL_LINE_SMOOTH );
+        glDisable( GL_POLYGON_SMOOTH );
+        glDisable( GL_MULTISAMPLE );
+
     glEnable(GL_LIGHT0);
     glEnable(GL_LIGHTING);
 
@@ -200,11 +213,17 @@ void GLWidget::paintGL()
 
             glMatrixMode(GL_MODELVIEW);
             glLoadIdentity();
-            gluLookAt(0-posx,650-pos2,50+cameraposZ, 0-posx,0,50+cameraposZ, 0,0,1 );//pos2 is the depth of the camera from the UI
-            glEnable(GL_DEPTH_TEST);
+         if(rtopview)
+            gluLookAt(0-posx,0-pos2,-650+cameraposZ, 0-posx,0,50+cameraposZ, 0,0,1 );//pos2 is the depth of the camera from the UI
+         else
+             gluLookAt(0-posx,650-pos2,50+cameraposZ, 0-posx,0,50+cameraposZ, 0,0,1 );//pos2 is the depth of the camera from the UI
+
+           // glEnable(GL_DEPTH_TEST);
             glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+            glDisable(GL_LINE_SMOOTH);
+            glDisable(GL_POLYGON_SMOOTH);
             glEnable(GL_MULTISAMPLE);
-            glEnable(GL_LINE_SMOOTH);
+            //glEnable(GL_LINE_SMOOTH);
 
 
             angle =  (float) posx;
@@ -364,4 +383,23 @@ void GLWidget::mousePressEvent(QMouseEvent* ev){
             id += 4;
         }
     }
+}
+
+void GLWidget::glStencilFunc(){
+    glColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE );
+    glEnable( GL_STENCIL_TEST );
+
+
+        //Replace where rendered
+        glStencilOp( GL_REPLACE, GL_REPLACE, GL_REPLACE );
+
+        //Render stencil triangle
+        glTranslatef( 12, 12, 0.f );
+        glRotatef(45, 0.f, 0.f, 1.f );
+        glBegin( GL_TRIANGLES );
+            glVertex2f(           -0.f / 4.f, -30 / 4.f );
+            glVertex2f(   40 / 4.f,  98 / 4.f );
+            glVertex2f(  -56 / 4.f,  67 / 4.f );
+        glEnd();
+
 }

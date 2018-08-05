@@ -1,6 +1,13 @@
 #include <QApplication>
 #include <QMessageBox>
 #include <stdio.h>
+#include<stdlib.h>
+#include <time.h>
+#include <QThread>
+//include <pybind11/pybind11.h>
+#include <pybind11/embed.h> // everything needed for embedding
+
+
 #include "mainwindow.h"
 #include "joystick.h"
 #include "camino.h"
@@ -17,15 +24,19 @@
 
 
 QSerialPort *serial;
+QTimer *timer;
+namespace py = pybind11;
 joystick *joy;
 extern camino *kamino;
+extern float UJ,DJ,RJ,LJ,BJ,FJ;
 
 QString str;
 float yPOS=0;
 float xPOS=0;
 float zPOS=0;
 
-float X1,Y1,Z1;
+float X1=2,Y1=-1,Z1=3;
+float gamma=0;
 bool connected=0;
 float a1=0,b1=12,c1=12;
 
@@ -74,6 +85,8 @@ extern int posx;
 extern int pos2;
 extern int cameraposZ;
 extern float degreeZ;
+extern bool joystick_found;
+extern bool rtopview;
 std::string source;
 
 bool si = false;
@@ -82,12 +95,76 @@ FILE *outfile;
 
 
 
-
-static PyObject* uarm_foo(PyObject* self, PyObject* args)
-{
-    printf("... in C++...: foo() method\n");
-    return PyLong_FromLong(51);
+void MainWindow::execute(){
+    /*yMoverU();
+    zMoverU();
+    qApp->processEvents();*/
 }
+
+
+static PyObject* foo(PyObject* self, PyObject* args){
+    //yPOS--;
+    float x,y,z;
+    float k;
+
+    if(PyArg_ParseTuple(args, "fff",&x,&y,&z))
+    {
+        printf("C++: uarm.gears(%f,%f,%f)\n",x,y,z);
+        qDebug()<<" uarms";
+        xPOS=x;
+        yPOS=y;
+        zPOS=z;
+
+
+    }
+    return PyLong_FromLong(0);
+
+    QString s= QString::number((float)yPOS);
+    std::cout << "In yMoverU "<<std::endl;
+    s="pos Y "+s+"\r";
+
+    small_gear2->degree=yPOS*ratio;
+    Gear2->degree=-yPOS;
+    horizontal->degree=Gear2->degree;//link3 y link004
+    palanca2->degree=Gear2->degree;//link2 y link_3
+    arm1->degree=horizontal->degree;//link6
+    arm2->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);//link7
+    arm2->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);//link7
+    secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+    secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+    SG90->deltaY=secondtriangle->deltaY;//Dj9g
+    SG90->deltaZ=secondtriangle->deltaZ;//Dj9g
+    SG90holder->deltaY=secondtriangle->deltaY;//board1
+    SG90holder->deltaZ=secondtriangle->deltaZ;//board1
+
+    link3->degree=Gear2->degree;//link3 y link004
+    link004->degree=Gear2->degree;//link3 y link004
+    link2->degree=Gear2->degree;//link2 y link_3
+    link3->degree=Gear2->degree;//link2 y link_3
+    link6->degree=horizontal->degree;//link6
+    link7->deltaZ=-65*sin(Gear2->degree*2*3.1416/360);//link7
+    link7->deltaY=65-65*cos(Gear2->degree*2*3.1416/360);//link7
+    link005->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+    link5->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;//link005,link5
+    link005->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+    link5->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;//link005,link5
+    Dj9g->deltaY=secondtriangle->deltaY;//Dj9g
+    Dj9g->deltaZ=secondtriangle->deltaZ;//Dj9g
+    board1->deltaY=secondtriangle->deltaY;//board1
+    board1->deltaZ=secondtriangle->deltaZ;//board1
+
+    if(serial->isOpen()){
+        serial->write(s.toStdString().c_str());
+        serial->flush();
+    }
+
+    //ui->plainTextEdit->insertPlainText(s);
+    //ui->lcdL->display((double)(yPOS));
+    qApp->processEvents();
+    return PyLong_FromLong(0);
+};
+
+
 
 static PyObject* uarm_show(PyObject* self, PyObject* args)
 {
@@ -109,33 +186,40 @@ static PyObject* uarm_add(PyObject* self,PyObject* args)
     if(PyArg_ParseTuple(args, "sfff",&s,&x,&y,&z))
     {
         printf("C++: a %s add(%f,%f,%f)\n",s,x,y,z);
-        esfera=new Bad();
-        esfera->loader(s,GREEN,x,y,z);
+        //esfera=new Bad();
+        //esfera->loader(s,GREEN,x,y,z);
     }
     return PyLong_FromLong(0);
 
 }
-
-static PyObject* uarm_gears(PyObject* self,PyObject* args)
-{
-    float x,y,z;
-
-    if(PyArg_ParseTuple(args, "fff",&x,&y,&z))
+ extern "C" PyObject* MainWindow::uarm_gears(PyObject* self,PyObject* args)
     {
-        printf("C++: uarm.gears(%f,%f,%f)\n",x,y,z);
+        float x,y,z;
+        MainWindow *a;
 
-        xPOS=x-1;
-        yPOS=y-1;
-        zPOS=z-1;
+        if(PyArg_ParseTuple(args, "fff",&x,&y,&z))
+        {
+            printf("C++: uarm.gears(%f,%f,%f)\n",x,y,z);
+            qDebug()<<" uarms?";
+            xPOS=x-1;
+            yPOS=y-1;
+            zPOS=z-1;
+            a->xMoverU();
+            a->yMoverU();
+            a->zMoverU();
+            execute();
+            qApp->processEvents();
+
+        }
+        return PyLong_FromLong(0);
     }
-    return PyLong_FromLong(0);
-}
 
 static struct PyMethodDef methods[] = {
-    { "foo", uarm_foo, METH_VARARGS, "Returns the number"},
+    { "foo", (PyCFunction )MainWindow::uarm_foo, METH_VARARGS, "Returns the number"},
     { "show", uarm_show, METH_VARARGS, "Show a number" },
     { "add", uarm_add, METH_VARARGS, "Add an object" },
-    { "gears", uarm_gears, METH_VARARGS, "Move the gears certain angle" },
+    { "gears",(PyCFunction )MainWindow::uarm_gears, METH_VARARGS, "Move the gears certain angle" },
+    { "calculate",(PyCFunction) MainWindow::Kalculate,METH_VARARGS,"Same as calculate but in python"},
     { NULL, NULL, 0, NULL }
 };
 
@@ -144,10 +228,11 @@ static struct PyModuleDef modDef = {
     NULL, NULL, NULL, NULL
 };
 
-static PyObject* PyInit_uarm(void)
+ static  PyObject* PyInit_uarm(void)
 {
     return PyModule_Create(&modDef);
 }
+
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -158,11 +243,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->setupUi(this);
     loadFile("position.pos",source);
-
-
     joy = new joystick();
     joy->start();
-
+    ui->LED->setText(joy->name);
     serial= new QSerialPort(this);
     ui->lcdNumberX->setPalette(Qt::blue);
     ui->lcdNumberY->setPalette(Qt::blue);
@@ -174,9 +257,10 @@ MainWindow::MainWindow(QWidget *parent) :
     serial->setDataBits(QSerialPort::Data8);
     serial->setParity(QSerialPort::NoParity);
     serial->setStopBits(QSerialPort::OneStop);
-    serial->setFlowControl(QSerialPort::NoFlowControl);
+    //serial->setFlow(QSerialPort::NoFlow);
     serial->open(QIODevice::ReadWrite);
     //serial->write("ok*");
+
     connect(serial,SIGNAL(readyRead()),this,SLOT(serialreceived()));
     connect(ui->Enabled_B,SIGNAL(pressed()),this,SLOT(serialM17()));
     connect(ui->Disabled_B,SIGNAL(pressed()),this,SLOT(serialM18()));
@@ -202,19 +286,19 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->CONNECT, SIGNAL(pressed()),this, SLOT(konnect( )));//Connect to a serial port
 
-    connect(joy, SIGNAL(up()),this, SLOT(yMoverU( )));
-    connect(joy, SIGNAL(down()),this, SLOT(yMoverD( )));
-    connect(joy, SIGNAL(right()),this, SLOT(zMoverU( )));
+    //connect(joy, SIGNAL(up()),this, SLOT(Arriba( )));
+    //connect(joy, SIGNAL(down()),this, SLOT(Abajo( )));
+    /*connect(joy, SIGNAL(right()),this, SLOT(zMoverU( )));
     connect(joy, SIGNAL(left()),this, SLOT(zMoverD( )));
     connect(joy, SIGNAL(front()),this, SLOT(xMoverU( )));//Front
     connect(joy, SIGNAL(back()),this, SLOT(xMoverD( )));//Back
-
+*/
     connect(ui->PYTHON, SIGNAL(pressed()),this, SLOT(python( )));//Back
 
 
     //Girar_wrist(0);
 
-    QTimer *timer = new QTimer(this);
+    timer = new QTimer(this);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateg()));
     timer->start(100);
 
@@ -247,7 +331,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     SG90->loader("SG90.stl",BLUE,25.16291,186.04488,72.00875);//done
     SG90holder->loader("SG90holder.stl",YELLOW,19.18367,211.53325,93.99998);//done
-//////////////////from here on tthe uarm files
+
+    //////////////////from here on tthe uarm files
+
     base01->loader("base01.stl",YELLOW,0,0,-113.68);//done
     base02->loader("base02.stl",YELLOW,0,0,-113.68);//done
     base03->loader("base03.stl",YELLOW,0,0,-113.68);//done
@@ -291,10 +377,9 @@ MainWindow::MainWindow(QWidget *parent) :
     s002->loader("s002.stl",YELLOW,0,0,0);//done
     s2->loader("s2.stl",YELLOW,0,0,0);//done
     STM4_22->loader("STM4_22.stl",YELLOW,0,0,0);//done
-//////////////////////////
 
-
-   // mover(source);
+    //////////////////////////
+    // mover(source);
 }
 
 MainWindow::~MainWindow()
@@ -310,46 +395,43 @@ int MainWindow::serialreceived()
     const char *posi;
     const char *kl;
     int d;
-   // parse((char *)data.constData());
-
-// printf("command %s %s %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3],argv[4],argv[5]);
+    // parse((char *)data.constData());
+    // printf("command %s %s %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3],argv[4],argv[5]);
     printf("%s",(char *)data.constData());
 
 
- if(strcmp(argv[0],"L")==0)
- {
-   printf("command %s %s %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3],argv[4],argv[5]);
-     d=atoi(argv[2]);
-     xPOS=(d-789)/1.9272;
-     xMoverU();
+     if(strcmp(argv[0],"L")==0)
+     {
+        printf("command %s %s %s %s %s %s\n",argv[0],argv[1],argv[2],argv[3],argv[4],argv[5]);
+        d=atoi(argv[2]);
+        xPOS=(d-789)/1.9272;
+        xMoverU();
 
-     d=atoi(argv[5]);
-     yPOS=(d-789+200)/1.9272;
-     yMoverU();
-     return 1;
- }
+        d=atoi(argv[5]);
+        yPOS=(d-789+200)/1.9272;
+        yMoverU();
+        return 1;
+     }
 
+    if(strcmp((char *)data.constData(),"ok")==0)
+    {
+        si=true;
+        printf("si");
+        return 1;
+     }
 
+     if(strcmp((char *)data.constData(),"fin")==0)
+     {
+      fin=true;
+      printf("fin");
+      return 1;
+     }
 
- if(strcmp((char *)data.constData(),"ok")==0)
- {
-  si=true;
-  printf("si");
-  return 1;
- }
-
- if(strcmp((char *)data.constData(),"fin")==0)
- {
-  fin=true;
-  printf("fin");
-  return 1;
- }
-
- if(strcmp(argv[0],"nok")==0)
- {
-  si=false;
-  return 0;
- }
+     if(strcmp(argv[0],"nok")==0)
+     {
+      si=false;
+      return 0;
+     }
 }
 
 
@@ -358,25 +440,29 @@ int MainWindow::received()
     QByteArray data = serial->readAll();
 
     //parse((char *)data.constData());
- printf("[%s]",(char *)data.constData());
- if(strcmp((char *)data.constData(),"ok")==0)
- {
-  printf("okj");
-  return 1;
- }
- return 0;
+    printf("[%s]",(char *)data.constData());
+    if(strcmp((char *)data.constData(),"ok")==0)
+    {
+      printf("okj");
+      return 1;
+    }
+    return 0;
 
 }
 
 
 void MainWindow::serialM17()
 {
+    if(serial->isOpen()){
     serial->write("M17\r");
+    }
 }
 
 void MainWindow::serialM18()
 {
+    if(serial->isOpen()){
     serial->write("M18\r");
+    }
 }
 
 void MainWindow::setzero()
@@ -396,18 +482,13 @@ void MainWindow::xMover(int x)
 
 void MainWindow::yMover(int y) // Moves away
 {
-   // yPOS=y;
-   // QString s= QString::number((float)yPOS/1);
+
     pos2=(float)y;
-    printf("%f\n",pos2);
-   // s="pos Y "+s+"\r";
-   // serial->write(s.toStdString().c_str());
-    //serial->flush();
     ui->lcdNumberY->display((double)(y));
 
 }
 
-void MainWindow::zMover(int z)
+void MainWindow::zMover(int z)//Camera Z pos
 {
     cameraposZ=(float)z;
     ui->lcdNumberZ->display((double)(z));
@@ -416,7 +497,7 @@ void MainWindow::zMover(int z)
 
 void MainWindow::yMoverU() //UP
 {
-    yPOS--;
+    //yPOS--;
     float k;
     QString s= QString::number((float)yPOS);
     std::cout << "In yMoverU "<<std::endl;
@@ -455,19 +536,20 @@ void MainWindow::yMoverU() //UP
         board1->deltaZ=secondtriangle->deltaZ;//board1
 
 
+    if(serial->isOpen()){
+        serial->write(s.toStdString().c_str());
+        serial->flush();
+        }
 
-    serial->write(s.toStdString().c_str());
-    serial->flush();
-
-    ui->plainTextEdit->insertPlainText(s);
-    ui->lcdL->display((double)(yPOS));
+    //ui->plainTextEdit->insertPlainText(s);
+    //ui->lcdL->display((double)(yPOS));
 }
 
 void MainWindow::yMoverD() //DOWN
 {
-    yPOS++;
+    //yPOS++;
     QString s= QString::number((float)yPOS);
-    std::cout << "In xMOverD "<<std::endl;
+   // std::cout << "In xMOverD "<<std::endl;
 
     s="pos Y "+s+"\r";
     small_gear2->degree=yPOS*ratio;
@@ -500,9 +582,11 @@ void MainWindow::yMoverD() //DOWN
     board1->deltaY=secondtriangle->deltaY;//board1
     board1->deltaZ=secondtriangle->deltaZ;//board
 
-    serial->write(s.toStdString().c_str());
-    serial->waitForBytesWritten(-1);
-    serial->flush();
+    if(serial->isOpen()){
+        serial->write(s.toStdString().c_str());
+        serial->waitForBytesWritten(-1);
+        serial->flush();
+    }
 
     ui->plainTextEdit->insertPlainText(s);
     ui->lcdL->display((double)(yPOS));
@@ -510,7 +594,7 @@ void MainWindow::yMoverD() //DOWN
 
 void MainWindow::xMoverU()  //FRONT
 {
-    xPOS=xPOS-1;
+    //xPOS=xPOS-1;
     float k;
     QString s= QString::number((float)xPOS);
     std::cout << "In xMOverU "<<std::endl;
@@ -539,62 +623,63 @@ void MainWindow::xMoverU()  //FRONT
     SG90holder->deltaY=secondtriangle->deltaY;
     SG90holder->deltaZ=secondtriangle->deltaZ;
 
-    serial->write(s.toStdString().c_str());
-    serial->waitForBytesWritten(-1);
-    serial->flush();
+    if(serial->isOpen()){
+        serial->write(s.toStdString().c_str());
+        serial->waitForBytesWritten(-1);
+        serial->flush();
+    }
 
-    ui->plainTextEdit->insertPlainText(s);
-    ui->lcdR->display((double)(xPOS));
+    //ui->plainTextEdit->insertPlainText(s);
+    //ui->lcdR->display((double)(xPOS));
 }
 
 void MainWindow::xMoverD() //BACK
 {
-    xPOS=xPOS+1;
+    //xPOS=xPOS+1;
     QString s= QString::number((float)xPOS/1);
-    std::cout << "In xMOverD "<<std::endl;
+    //std::cout << "In xMOverD "<<std::endl;
     s="pos X "+s+"\r";
     small_gear1->degree=-xPOS*ratio;
     main_gear->degree=xPOS;
     main_bar->degree=main_gear->degree;
     arm3->degree=main_bar->degree;
 
-
     upper_triangle->deltaY=-120*sin( main_bar->degree*2*3.1416/360);
     upper_triangle->deltaZ=-120+120*cos( main_bar->degree*2*3.1416/360);
     horizontal->deltaY=-120*sin( main_bar->degree*2*3.1416/360);
     horizontal->deltaZ=-120+120*cos( main_bar->degree*2*3.1416/360);
-
     arm2->degree=arm3->degree;
-
-
     horizontal->deltaY=-120*sin( main_bar->degree*2*3.1416/360);
     horizontal->deltaZ=-120+120*cos( main_bar->degree*2*3.1416/360);
-
     arm1->deltaY=horizontal->deltaY;
     arm1->deltaZ=horizontal->deltaZ;
-
     secondtriangle->deltaY=-120+120*cos(horizontal->degree*3.1416/180)+horizontal->deltaY;
     secondtriangle->deltaZ=120*sin(horizontal->degree*3.1416/180)+horizontal->deltaZ;
-
     SG90->deltaY=secondtriangle->deltaY;
     SG90->deltaZ=secondtriangle->deltaZ;
     SG90holder->deltaY=secondtriangle->deltaY;
     SG90holder->deltaZ=secondtriangle->deltaZ;
 
-    serial->write(s.toStdString().c_str());
-    serial->waitForBytesWritten(-1);
+    if(serial->isOpen()){
+        serial->write(s.toStdString().c_str());
+        serial->waitForBytesWritten(-1);
+        }
+
     ui->plainTextEdit->insertPlainText(s);
     ui->lcdR->display((double)(xPOS));
 }
 
 void MainWindow::zMoverU()
 {
-    zPOS=zPOS-1;
+   // zPOS=zPOS-1;
     degreeZ=zPOS;
     QString s= QString::number((float)zPOS/1);
     s="pos Z "+s+"\r";
-    serial->write(s.toStdString().c_str());
-    ui->lcdNumberY->display((double)(zPOS/10));
+
+    if(serial->isOpen()){
+        serial->write(s.toStdString().c_str());
+        }
+    //ui->lcdNumberY->display((double)(zPOS/10));
 
     small_gear2->degreeZ=degreeZ*ratio;
     Gear2->degreeZ=degreeZ;
@@ -614,16 +699,18 @@ void MainWindow::zMoverU()
     main_gear->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90holder->degreeZ=upper_triangle->degreeZ=degreeZ;
-    ui->lcdZ->display((double)(zPOS));
+    //ui->lcdZ->display((double)(zPOS));
 }
 
 void MainWindow::zMoverD() //Moves the object around Z
 {
-    zPOS=zPOS+1;
+    //zPOS=zPOS+1;
     degreeZ=zPOS;
     QString s= QString::number((float)zPOS);
     s="pos Z "+s+"\r";
-    serial->write(s.toStdString().c_str());
+    if(serial->isOpen()){
+       serial->write(s.toStdString().c_str());
+       }
     ui->lcdNumberY->display((double)(zPOS));
 
     small_gear2->degreeZ=degreeZ;
@@ -649,16 +736,63 @@ void MainWindow::zMoverD() //Moves the object around Z
     ui->lcdZ->display((double)(zPOS));
  }
 
-void MainWindow::updateg()
+void MainWindow::updateg()//ler
 {
+    static float j=0;
+    static float h=0;
+    static float k=0;
+    float delta=0.5;
+    float jforward=1.05;
+    float jbackward=0.95;
+    float X2,Y2;
 
     QString s;
     s="backl\r";
     if(feedbackb==true)
-    serial->write(s.toStdString().c_str());
+        serial->write(s.toStdString().c_str());
     //ui->lcdNumberY->display((double)(zPOS/10));
+    timer->start(100);
+    if(UJ==1){ //Up only moves the Z up
+        Z1+=delta;
+        qDebug()<<"UP"<<j;
+        moving(X1,Y1,Z1+j);
+        }
+    if(DJ==1){ //Up only moves the Z down
+        Z1-=delta;
+        qDebug()<<"DOWN"<<j;
+        moving(X1,Y1,Z1-j);
+        }
+    if(RJ==1){
+        gamma=3.1416*5/180;
+        X2=X1*cos(gamma)-Y1*sin(gamma);
+        Y2=X1*sin(gamma)+Y1*cos(gamma);
+        X1=X2;
+        Y1=Y2;
+        qDebug()<<"Gamma+ "<<gamma*180/3.1416;
 
-
+        moving(X1,Y1-h,Z1);
+        }
+    if(LJ==1){
+        gamma=-3.1416*5/180;
+        X2=X1*cos(gamma)-Y1*sin(gamma);
+        Y2=X1*sin(gamma)+Y1*cos(gamma);
+        X1=X2;
+        Y1=Y2;
+        qDebug()<<"Gamma- "<<gamma*180/3.1416;
+        moving(X1,Y1+h,Z1);
+        }
+    if(FJ==1){  //Get X1 and Y1 and the angle. Then calculate the line and increase it
+        X1=X1*jforward;
+        Y1=Y1*jforward;
+        qDebug()<<"RIGHT "<<h;
+        moving(X1,Y1-h,Z1);
+        }
+    if(BJ==1){//Get X1 and Y1 and the angle. Then calculate the line and increase it
+        X1=X1*jbackward;
+        Y1=Y1*jbackward;
+        qDebug()<<"LEFT "<<h;
+        moving(X1,Y1,Z1);
+        }
 }
 
 
@@ -667,8 +801,11 @@ void MainWindow::updateg2()
 
     QString s;
     s="backr\r";
+    if(serial->isOpen()){
     serial->write(s.toStdString().c_str());
+    }
     //ui->lcdNumberY->display((double)(zPOS/10));
+
 
 }
 
@@ -704,7 +841,7 @@ void MainWindow::calculate()
    b1=y0-y;
    c1=z0-z;
 
-   t=(-x1-x0)/a1;//parametrizaion
+   t=(x-x0)/a1;//parametrizaion
 
    qDebug()<<"a= "<<a1;
    qDebug()<<"b= "<<b1;
@@ -712,11 +849,12 @@ void MainWindow::calculate()
    qDebug()<<"t= "<<t;
 
    if(t>0){
-       for(m1=0;m1<t;m1=m1+0.1)
+       for(m1=0;m1<1.01;m1=m1+0.01)
        {
-           x=x0-a1*m1;
-           y=y0-b1*m1;
-           z=z0-c1*m1;
+           x=x0+a1*m1;
+           y=y0+b1*m1;
+           z=z0+c1*m1;
+           qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
 
             X1=x;
             Y1=y;
@@ -761,11 +899,14 @@ void MainWindow::calculate()
    }
    else
    {
-       for(m1=t;m1>0;m1=m1+0.1)
+       qDebug()<<"Negative";
+       for(m1=0;m1>-1.01;m1=m1-0.01)
        {
-           x=x0-a1*m1;
-           y=y0-b1*m1;
-           z=z0-c1*m1;
+           x=x0+a1*m1;
+           y=y0+b1*m1;
+           z=z0+c1*m1;
+           qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
+          // QThread::msleep(5);
 
            X1=x;
            Y1=y;
@@ -799,10 +940,132 @@ void MainWindow::calculate()
            xPOS=-beta*180/(3.1416);
            yPOS=-n*180/(3.1416);
            zPOS=90-theta*180/3.1416;
-           qDebug()<<"m= "<<m;
+           //qDebug()<<"m= "<<m;
            xMoverD();
            yMoverD();
            zMoverD();
+            qApp->processEvents();
+           //ui->lcdNumberY->display((double)(xPOS));
+
+       }
+
+   }
+
+}
+
+extern "C" PyObject* MainWindow::Kalculate(PyObject* self,PyObject* args)
+{
+    float x2,y2,z2;
+    MainWindow *a;
+
+    if(PyArg_ParseTuple(args, "fff",&x2,&y2,&z2))
+    {
+        printf("C++: uarm.Kalculate(%f,%f,%f)\n",x2,y2,z2);
+        qDebug()<<" Kalculate";
+    }
+
+   float x,y,z,alpha,beta,gamma,m,l,c,n,phi,s,theta;
+   QString str;
+   l=12;
+   a1=0;b1=12;c1=12;
+
+   float x0,y0,z0,a1,b1,c1,t,x1,y1,z1,m1;//http://tutorial.math.lamar.edu/Classes/CalcIII/EqnsOfLines.aspx
+
+
+   x0=(float) X1;
+   y0=(float) Y1;
+   z0=(float) Z1;
+
+
+   x=x2;
+   y=y2;
+   z=z2;
+
+   a1=x0-x;
+   b1=y0-y;
+   c1=z0-z;
+
+   t=(x-x0)/a1;//parametrizaion
+
+   qDebug()<<"a= "<<a1;
+   qDebug()<<"b= "<<b1;
+   qDebug()<<"c= "<<c1;
+   qDebug()<<"t= "<<t;
+
+   if(t>0){
+       for(m1=0;m1<1.01;m1=m1+0.01)
+       {
+           x=x0+a1*m1;
+           y=y0+b1*m1;
+           z=z0+c1*m1;
+           qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
+
+            X1=x;
+            Y1=y;
+            Z1=z;
+
+           s=sqrt(x*x+y*y);
+           theta=atan(y/x);
+           //// Then change y by s
+           m=sqrt(s*s+z*z);
+
+           alpha=acos(m/(2*l));
+           gamma=atan(z/s);
+           beta=3.1416/2-alpha-gamma;
+           c=3.1416/2-beta;
+           phi=acos((m*m-2*l*l)/(-2*l*l));
+           n=-(3.1416-c-phi);
+           xPOS=-beta*180/(3.1416);
+           yPOS=-n*180/(3.1416);
+           zPOS=90-theta*180/3.1416;
+           qDebug()<<"m= "<<m;
+          // QThread::msleep (100);
+           a->xMoverU();
+           a->yMoverU();
+           a->zMoverU();
+
+           qApp->processEvents();
+
+           //ui->lcdNumberY->display((double)(xPOS));
+
+       }
+   }
+   else
+   {
+       qDebug()<<"Negative";
+       for(m1=0;m1>-1.01;m1=m1-0.01)
+       {
+           x=x0+a1*m1;
+           y=y0+b1*m1;
+           z=z0+c1*m1;
+           qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
+          // QThread::msleep(5);
+
+           X1=x;
+           Y1=y;
+           Z1=z;
+
+           s=sqrt(x*x+y*y);
+           theta=atan(y/x);
+           //// Then change y by s
+           m=sqrt(s*s+z*z);
+
+           alpha=acos(m/(2*l));
+           gamma=atan(z/s);
+           beta=3.1416/2-alpha-gamma;
+           c=3.1416/2-beta;
+           phi=acos((m*m-2*l*l)/(-2*l*l));
+           n=-(3.1416-c-phi);
+           xPOS=-beta*180/(3.1416);
+           yPOS=-n*180/(3.1416);
+           zPOS=90-theta*180/3.1416;
+           //qDebug()<<"m= "<<m;
+            //QThread::msleep (100);
+           a->xMoverU();
+           a->yMoverU();
+           a->zMoverU();
+
+           qApp->processEvents();
 
            //ui->lcdNumberY->display((double)(xPOS));
 
@@ -810,6 +1073,7 @@ void MainWindow::calculate()
 
    }
 
+   return PyLong_FromLong(0);
 }
 
 
@@ -864,11 +1128,12 @@ void MainWindow::parse(char *cmd)
     int i=0;
     printf("%s",cmd);
     argv[i] = strtok(cmd, " ");
-        do
-        {
-            argv[++i] = strtok(NULL, " ");
-        } while ((i < 30) && (argv[i] != NULL));
 
+    do
+    {
+        argv[++i] = strtok(NULL, " ");
+    }
+    while ((i < 30) && (argv[i] != NULL));
 }
 
 void MainWindow::Mover()
@@ -879,16 +1144,6 @@ void MainWindow::Mover()
 void MainWindow::mover(std::string& str)
 {
    float a,b,c;
-
-   outfile=fopen("C:/Users/German/Documents/programacion/test/bin/Release/out.txt","w");
-   if(outfile==NULL)
-   {
-       printf("No out text");
-
-   }
-
-
- fprintf(outfile,"Starting point: X= %0.2f, Y= %0.2f, Z= %0.2f\n",a1,b1,c1);
    float DeltaA,DeltaB,DeltaC;
    float deltaA,deltaB,deltaC;
    float maxvel=0.1;
@@ -896,14 +1151,25 @@ void MainWindow::mover(std::string& str)
    int e;
    char s;
    QString sleep;
+   char tmp[300];
+
+    outfile=fopen("C:/Users/German/Documents/programacion/test/bin/Release/out.txt","w");
+
+    if(outfile==NULL)
+    {
+       printf("No out text\n");
+    }
+    fprintf(outfile,"Starting point: X= %0.2f, Y= %0.2f, Z= %0.2f\n",a1,b1,c1);
     std::ifstream in("C:/Users/German/Documents/programacion/test/bin/Release/position.pos");
+
     if(!in.is_open())
     {
         std::cout << "The file cannot be opened\n";
         exit(0);
         return;
     }
-    char tmp[300];
+
+
     do
     {
        in.getline(tmp,300);
@@ -911,15 +1177,14 @@ void MainWindow::mover(std::string& str)
        std::cout << s <<" " << a<<" "<< b << " "<<c <<std::endl;
        fprintf(outfile,"\nCommand: %c, X= %f, Y= %f, Z= %f\n",s,a,b,c);
        fprintf(outfile,"a1= %f, b1= %f, c1= %f\n",a1,b1,c1);
-
        sleep=ui->espera->toPlainText();
-        std::cout << ".." <<std::endl;
+       //std::cout << ".." <<std::endl;
+
        if(strcmp(&s,"P")==0)
         {
            DeltaA=abs((a-a1)/maxvel);
            DeltaB=abs((b-b1)/maxvel);
            DeltaC=abs((c-c1)/maxvel);
-
            fprintf(outfile,"DeltaA: %f DeltaB: %f Delta C: %f \n\n",DeltaA,DeltaB,DeltaC);
 
            if(DeltaA>=DeltaB)
@@ -951,18 +1216,16 @@ void MainWindow::mover(std::string& str)
 
             fprintf(outfile,"Iteration[%i]: X= %0.2f, Y= %0.2f, Z= %0.2f\n",e,a1,b1,c1);
             actuator(a1,b1,c1);
-           while(fin!=true)
-           {
-               printf(".");
-               QString s;
-               s="stat\r";
-               serial->write(s.toStdString().c_str());
+            while(fin!=true)
+            {
+                printf(".");
+                QString s;
+                s="stat\r";
+                if(serial->isOpen()){
+                serial->write(s.toStdString().c_str());
+                }
                 qApp->processEvents();
-
-           };
-
-
-
+               };
            // actuator(a1,b1,c1);
             fprintf(outfile,"%0.2f %0.2f %0.2f\n",a1,b1,c1);
             }
@@ -972,21 +1235,18 @@ void MainWindow::mover(std::string& str)
        a1=a;
        b1=b;
        c1=c;
-        printf("New a1=%f b1= %f c1=%f\n",a1,b1,c1);
-        fin=false;
-
-
+       printf("New a1=%f b1= %f c1=%f\n",a1,b1,c1);
+       fin=false;
     }while(!in.eof());
     fclose(outfile);
-
 }
 
 void MainWindow::Abrir_grip(int a)
 {
     QString s= QString::number((int)a);
     s="pos G "+s+"\r";
-    serial->write(s.toStdString().c_str());
-
+    if(serial->isOpen())
+        serial->write(s.toStdString().c_str());
 
 }
 
@@ -994,10 +1254,10 @@ void MainWindow::Girar_wrist(int a)
 {
     QString s= QString::number((int)a);
     s="pos W "+s+"\r";
-    serial->write(s.toStdString().c_str());
+    if(serial->isOpen())
+        serial->write(s.toStdString().c_str());
+
     ui->plainTextEdit->insertPlainText(s);
-
-
 }
 
 void MainWindow::konnect()//connect
@@ -1014,32 +1274,40 @@ void MainWindow::konnect()//connect
         serial->setDataBits(QSerialPort::Data8);
         serial->setParity(QSerialPort::NoParity);
         serial->setStopBits(QSerialPort::OneStop);
-        serial->setFlowControl(QSerialPort::NoFlowControl);
+        //serial->setFlow(QSerialPort::NoFlow);
         serial->open(QIODevice::ReadWrite);
         ui->CONNECT->setText("Connected");
         connected=1;
     }
 }
 
+namespace py = pybind11;
 void MainWindow::python()
 {
-
-
     Py_SetPythonHome(L"C:\\Python34");
 
     kamino->show();
     PyImport_AppendInittab("uarm", &PyInit_uarm);
 
-        CPyInstance hInstance;
+    CPyInstance hInstance;
+    const char pFile[] = "C:\\Users\\German\\Documents\\programacion\\build-test-Desktop_Qt_5_9_1_MinGW_32bit-Debug\\debug\\pyemb6.py";
+    FILE* fp = _Py_fopen(pFile, "r");
 
-        const char pFile[] = "C:\\Users\\German\\Documents\\programacion\\build-test-Desktop_Qt_5_9_1_MinGW_32bit-Debug\\debug\\pyemb6.py";
-        FILE* fp = _Py_fopen(pFile, "r");
-        if(fp==NULL)
-             std::cout<<"file not found";
-        else
-          PyRun_AnyFile(fp, pFile);
+    if(fp==NULL)
+        std::cout<<"file not found";
+    else
+        PyRun_AnyFile(fp, pFile);
+}
+
+int add(int i, int j) {
+    return i + j;
+}
 
 
+PYBIND11_PLUGIN(example) {
+    py::module m("example", "pybind11 example plugin");
+    m.def("add", &add, "A function which adds two numbers");
+    return m.ptr();
 }
 
 void MainWindow::on_UARM_clicked()
@@ -1066,8 +1334,237 @@ void MainWindow::on_PROJECTED_clicked()
     PROJECTED=true;
 }
 
-void MainWindow::execute(){
-    yMoverU();
-    zMoverU();
-    qApp->processEvents();
+void MainWindow::Arriba()
+{
+    if(X1<15)
+    {
+        //X1=X1+0.1;
+        //qDebug()<<"WWWW";
+        calcular(X1+1,0,0);
+    }
+
+}
+
+void MainWindow::Abajo()
+{
+    if(X1>5)
+    {
+        //X1=X1-0.1;
+        calcular(X1-1,0,0);
+    }
+
+}
+
+
+extern "C" PyObject* MainWindow::uarm_foo(PyObject* self, PyObject* args){
+    printf("... in C++...: foo() method\n");
+    return PyLong_FromLong(51);
+}
+
+
+void MainWindow::calcular(float x, float y , float z){
+    float alpha,beta,gamma,m,l,c,n,phi,s,theta;
+    QString str;
+    l=12;
+    a1=0;b1=12;c1=12;
+
+    float x0,y0,z0,a1,b1,c1,t,x1,y1,z1,m1;//http://tutorial.math.lamar.edu/Classes/CalcIII/EqnsOfLines.aspx
+
+    x0=(float) X1;
+    y0=(float) Y1;
+    z0=(float) Z1;
+
+    a1=x0-x;
+    b1=y0-y;
+    c1=z0-z;
+
+    t=(x-x0)/a1;//parametrizaion
+
+   /* qDebug()<<"a= "<<a1;
+    qDebug()<<"b= "<<b1;
+    qDebug()<<"c= "<<c1;
+    qDebug()<<"t= "<<t;*/
+
+    if(t>0){
+        for(m1=0;m1<1.01;m1=m1+0.01)
+        {
+            x=x0+a1*m1;
+            y=y0+b1*m1;
+            z=z0+c1*m1;
+            //qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
+
+             X1=x;
+             Y1=y;
+             Z1=z;
+
+            s=sqrt(x*x+y*y);
+            theta=atan(y/x);
+            //// Then change y by s
+            m=sqrt(s*s+z*z);
+
+            alpha=acos(m/(2*l));
+            gamma=atan(z/s);
+            beta=3.1416/2-alpha-gamma;
+            c=3.1416/2-beta;
+            phi=acos((m*m-2*l*l)/(-2*l*l));
+            n=-(3.1416-c-phi);
+            QString BETA = QString::number(beta*180/3.1416);
+            QString ALPHA = QString::number(n*180/3.1416);
+            QString GAMMA = QString::number(gamma*180/3.1416);
+            QString PHI = QString::number(phi*180/3.1416);
+            QString THETA =QString::number(90-theta*180/3.1416);
+            QString S =QString::number(s);
+            QString M = QString::number(m);
+            ui->alpha->setText(ALPHA);
+            ui->beta->setText(BETA);
+            ui->gamma->setText(GAMMA);
+            ui->theta->setText(THETA);
+            ui->m->setText(M);
+            ui->s->setText(S);
+            ui->phi->setText(PHI);
+            xPOS=-beta*180/(3.1416);
+            yPOS=-n*180/(3.1416);
+            zPOS=90-theta*180/3.1416;
+            //qDebug()<<"m= "<<m;
+            xMoverD();
+            yMoverD();
+            zMoverD();
+
+            //ui->lcdNumberY->display((double)(xPOS));
+
+        }
+    }
+    else
+    {
+       // qDebug()<<"Negative";
+        for(m1=0;m1>-1.01;m1=m1-0.01)
+        {
+            x=x0+a1*m1;
+            y=y0+b1*m1;
+            z=z0+c1*m1;
+           // qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
+           // QThread::msleep(5);
+
+            X1=x;
+            Y1=y;
+            Z1=z;
+
+            s=sqrt(x*x+y*y);
+            theta=atan(y/x);
+            //// Then change y by s
+            m=sqrt(s*s+z*z);
+
+            alpha=acos(m/(2*l));
+            gamma=atan(z/s);
+            beta=3.1416/2-alpha-gamma;
+            c=3.1416/2-beta;
+            phi=acos((m*m-2*l*l)/(-2*l*l));
+            n=-(3.1416-c-phi);
+            QString BETA = QString::number(beta*180/3.1416);
+            QString ALPHA = QString::number(n*180/3.1416);
+            QString GAMMA = QString::number(gamma*180/3.1416);
+            QString PHI = QString::number(phi*180/3.1416);
+            QString THETA =QString::number(90-theta*180/3.1416);
+            QString S =QString::number(s);
+            QString M = QString::number(m);
+            ui->alpha->setText(ALPHA);
+            ui->beta->setText(BETA);
+            ui->gamma->setText(GAMMA);
+            ui->theta->setText(THETA);
+            ui->m->setText(M);
+            ui->s->setText(S);
+            ui->phi->setText(PHI);
+            xPOS=-beta*180/(3.1416);
+            yPOS=-n*180/(3.1416);
+            zPOS=90-theta*180/3.1416;
+            //qDebug()<<"m= "<<m;
+            xMoverD();
+            yMoverD();
+            zMoverD();
+             qApp->processEvents();
+            //ui->lcdNumberY->display((double)(xPOS));
+
+        }
+
+    }
+
+}
+
+
+void MainWindow::moving(float x, float y , float z){
+
+    float alpha,beta,gamma,m,l,c,n,phi,s,theta;
+    QString str;
+    l=12;
+    a1=0;b1=12;c1=12;
+
+    float x0,y0,z0,a1,b1,c1,t,x1,y1,z1,m1;//http://tutorial.math.lamar.edu/Classes/CalcIII/EqnsOfLines.aspx
+
+    x0=(float) X1;
+    y0=(float) Y1;
+    z0=(float) Z1;
+
+    a1=x0-x;
+    b1=y0-y;
+    c1=z0-z;
+
+    t=(x-x0)/a1;//parametrizaion
+
+   /* qDebug()<<"a= "<<a1;
+    qDebug()<<"b= "<<b1;
+    qDebug()<<"c= "<<c1;
+    qDebug()<<"t= "<<t;*/
+   /* x=x0+a1*m1;
+    y=y0+b1*m1;
+    z=z0+c1*m1;*/
+    //qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
+
+    X1=x;
+    Y1=y;
+    Z1=z;
+
+    s=sqrt(x*x+y*y);
+    theta=atan(y/x);
+    //// Then change y by s
+    m=sqrt(s*s+z*z);
+    alpha=acos(m/(2*l));
+    gamma=atan(z/s);
+    beta=3.1416/2-alpha-gamma;
+    c=3.1416/2-beta;
+    phi=acos((m*m-2*l*l)/(-2*l*l));
+    n=-(3.1416-c-phi);
+    QString BETA = QString::number(beta*180/3.1416);
+    QString ALPHA = QString::number(n*180/3.1416);
+    QString GAMMA = QString::number(gamma*180/3.1416);
+    QString PHI = QString::number(phi*180/3.1416);
+    QString THETA =QString::number(90-theta*180/3.1416);
+    QString S =QString::number(s);
+    QString M = QString::number(m);
+    ui->alpha->setText(ALPHA);
+    ui->beta->setText(BETA);
+    ui->gamma->setText(GAMMA);
+    ui->theta->setText(THETA);
+    ui->m->setText(M);
+    ui->s->setText(S);
+    ui->phi->setText(PHI);
+    xPOS=-beta*180/(3.1416);
+    yPOS=-n*180/(3.1416);
+    zPOS=90-theta*180/3.1416;
+    //qDebug()<<"m= "<<m;
+    xMoverD();
+    yMoverD();
+    zMoverD();
+    //ui->lcdNumberY->display((double)(xPOS));
+}
+
+void MainWindow::on_frontview_clicked()
+{
+    rtopview    =   false;
+
+}
+
+void MainWindow::on_topview_clicked()
+{
+    rtopview    =   true;
+
 }

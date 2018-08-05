@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include "helper.h"
 
 namespace Ui {
 class MainWindow;
@@ -16,7 +17,12 @@ public:
     ~MainWindow();
     uint8_t argc, i = 0;
     char *argv[30];
-    void execute();
+    static void execute();
+    PyObject* uarm_foo(PyObject* self, PyObject* args);
+    static  PyObject* uarm_gears(PyObject* self, PyObject* args);
+    static  PyObject* Kalculate(PyObject* self, PyObject* args);
+    void calcular(float x, float y,float z);
+    void moving(float x, float y , float z);
 
 private Q_SLOTS:
     void parse(char *cmd);
@@ -41,18 +47,22 @@ private Q_SLOTS:
     void updateg2();
     void feedbacks();
     void calculate();
+
+    void Arriba();
+    void Abajo();
     void Mover();
     void mover(std::string& );
     void actuator(float ,float ,float );
     void konnect();
     void python();
     void on_UARM_clicked();
-
     void on_DARM_clicked();
-
     void on_ORTHO_clicked();
-
     void on_PROJECTED_clicked();
+
+    void on_frontview_clicked();
+
+    void on_topview_clicked();
 
 private:
     Ui::MainWindow *ui;

@@ -7,7 +7,7 @@
 QT       += core gui opengl serialport
 
 
-CONFIG += no_keywords
+CONFIG += no_keywords -fpermissive
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -17,7 +17,7 @@ TEMPLATE = app
 
 LIBS += -LC:/Qt/5.6/mingw492_32/lib/libQt4OpenGL.a -lopengl32 -lglu32 -LC:\SDL2\lib\x86 -lSDL2 -LC:\Python34\libs -lpython34
 
-INCLUDEPATH += C:\SDL2\include C:\Python34\include
+INCLUDEPATH += C:\SDL2\include C:\Python34\include C:\pybind11\include
 
 SOURCES += main.cpp\
         mainwindow.cpp \

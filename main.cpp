@@ -60,46 +60,24 @@ int pos2;
 int cameraposZ;
 int solidos=0;
 
+bool rtopview    =   true;
+bool rfrontview  =   false;
+
 bool UARM=true, DARM=false;
+bool joystick_found=true;
 
 float degreeZ;
 camino *kamino;
+float UJ=0,DJ=0,RJ=0,LJ=0,FJ=0,BJ=0;
 
 
 int main(int argc, char *argv[])
 {
-
-
-
     QApplication a(argc, argv);
+    a.setAttribute(Qt::AA_UseDesktopOpenGL);
     MainWindow w;
-
     pathStr= a.applicationDirPath();
-
     kamino= new camino(pathStr);
-
-
-
-
-    QSurfaceFormat format;
-        format.setDepthBufferSize(24);
-        format.setStencilBufferSize(8);
-        format.setVersion(3, 2);
-        format.setProfile(QSurfaceFormat::CoreProfile);
-        QSurfaceFormat::setDefaultFormat(format);
-
-    QGLFormat glFormat;
-     glFormat.setSampleBuffers(true);
-     glFormat.setSamples(4);
-
-
-
-
-
-
     w.show();
-
-
-
     return a.exec();
 }

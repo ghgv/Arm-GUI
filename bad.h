@@ -40,8 +40,8 @@ public:
      triangle *solid;
      float R,G,B;
      bool select=false;
-     int degree;
-     int degreeZ;
+     float degree;
+     float degreeZ;
      float offX, offY, offZ;
      float posX,posY,posZ;
      float deltaX,deltaY,deltaZ;

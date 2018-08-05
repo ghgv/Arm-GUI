@@ -8,10 +8,12 @@
 class joystick : public QThread
 {
      Q_OBJECT
-SDL_Event e;
-const int JOYSTICK_DEAD_ZONE = 8000;
-public:
+    SDL_Event e;
+    const int JOYSTICK_DEAD_ZONE = 3000;
+    int index=0;
 
+public:
+    QString name="";
     joystick();
     //~joystick();
     ~joystick();
