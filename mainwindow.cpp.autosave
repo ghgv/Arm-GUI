@@ -630,7 +630,7 @@ void MainWindow::xMoverU()  //FRONT , is right motor clock wise
         //xPOS=xPOS-1;
         float k;
         QString s= QString::number((float)xPOS);
-        qDebug()<< "In xMOverU ";
+        qDebug()<< "In xMOverU Right motor ";
 
         s="pos X "+s+"\r";
         small_gear1->degree=-xPOS*ratio;
@@ -661,7 +661,7 @@ void MainWindow::xMoverU()  //FRONT , is right motor clock wise
 
             if(serial->canReadLine()==true){
                 QByteArray answer = serial->readLine();
-                qDebug()<<"asnsewr="<<answer.data();
+                qDebug()<<"ansewr="<<answer.data();
                 dlog->insertPlainText(answer.data());
             }
         }

@@ -47,6 +47,12 @@ private Q_SLOTS:
     void updateg2();
     void feedbacks();
     void calculate();
+    void RMCW(); //Right motor clockwise
+    void RMACW(); //Right motor anticlockwise
+    void LMCW(); //L motor
+    void LMACW(); //L motor
+    void ZMACW();//Z Motor acw
+    void ZMCW();//Z Motor acw
 
     void Arriba();
     void Abajo();
