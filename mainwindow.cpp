@@ -15,6 +15,7 @@
 #include "camino.h"
 #include "ui_mainwindow.h"
 #include "uarmext.h"
+#include "serial.h"
 
 #include <QSerialPort>
 #include <QTimer>
@@ -42,6 +43,7 @@ float zPOS=0;
 float X1=2,Y1=-1,Z1=3;
 float gamma=0;
 bool connected=0;
+bool status=true;
 float a1=0,b1=12,c1=12;
 
 bool feedbackb=false;
@@ -124,7 +126,7 @@ static PyObject* foo(PyObject* self, PyObject* args){
     return PyLong_FromLong(0);
 
     QString s= QString::number((float)yPOS);
-    std::cout << "In yMoverU "<<std::endl;
+    //std::cout << "In yMoverUP "<<std::endl;
     s="pos Y "+s+"\r";
 
     small_gear2->degree=yPOS*ratio;
@@ -157,17 +159,31 @@ static PyObject* foo(PyObject* self, PyObject* args){
     board1->deltaY=secondtriangle->deltaY;//board1
     board1->deltaZ=secondtriangle->deltaZ;//board1
 
-    if(serial->isOpen()){
+    int a,g=0;
+    if(serial->isOpen() && status== true){
         serial->write(s.toStdString().c_str());
-        serial->flush();
+        status=false;
         if(serial->canReadLine()==true){
-            QByteArray answer = serial->readLine(2);
-            printf("Answer %c",answer[0]);
+            QByteArray answer = serial->readLine();
+            while(a=strncmp ("ok",answer.data(),2)!=0 && g<200)
+            {
+               answer = serial->readLine();
+               qDebug()<<"Respuesta="<<g<<" "<<a<<" "<<answer.data();
+               serial->write(s.toStdString().c_str());
+               g++;
+            }
+            if(g>150){
+                dlog->insertPlainText("Time out\n");
+            }
+            else{
+                dlog->insertPlainText(answer.data());
+                status=true;
+            }
         }
     }
+    else
+       qDebug()<<"not connected\n";
 
-    //ui->plainTextEdit->insertPlainText(s);
-    //ui->lcdL->display((double)(yPOS));
     angleL->display((double)(yPOS));
     qApp->processEvents();
     return PyLong_FromLong(0);
@@ -273,6 +289,7 @@ MainWindow::MainWindow(QWidget *parent) :
     serial->setFlowControl(QSerialPort::NoFlowControl);
     serial->open(QIODevice::ReadWrite);
     //serial->write("ok*");
+    serial->readAll();
 
     //connect(serial,SIGNAL(readyRead()),this,SLOT(serialreceived()));
     connect(ui->Enabled_B,SIGNAL(pressed()),this,SLOT(serialM17()));
@@ -299,13 +316,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->CONNECT, SIGNAL(pressed()),this, SLOT(konnect( )));//Connect to a serial port
 
-    //connect(joy, SIGNAL(up()),this, SLOT(Arriba( )));
-    //connect(joy, SIGNAL(down()),this, SLOT(Abajo( )));
-    /*connect(joy, SIGNAL(right()),this, SLOT(zMoverU( )));
-    connect(joy, SIGNAL(left()),this, SLOT(zMoverD( )));
-    connect(joy, SIGNAL(front()),this, SLOT(xMoverU( )));//Front
-    connect(joy, SIGNAL(back()),this, SLOT(xMoverD( )));//Back
-*/
     connect(ui->PYTHON, SIGNAL(pressed()),this, SLOT(python( )));//Back
 
 
@@ -513,9 +523,10 @@ void MainWindow::zMover(int z)//Camera Z pos
 
 void MainWindow::yMoverU() //UP
 {
- if(yPOS>0 && yPOS<65)   {
+ dlog->insertPlainText("UP\n");
+ if(yPOS>=0 && yPOS<=65 )   {
         QString s= QString::number((float)yPOS);
-        std::cout << "In yMoverU "<<std::endl;
+        std::cout << "In yMoverUC "<<std::endl;
         s="pos Y "+s+"\r";
 
         small_gear2->degree=yPOS*ratio;
@@ -550,19 +561,38 @@ void MainWindow::yMoverU() //UP
             board1->deltaY=secondtriangle->deltaY;//board1
             board1->deltaZ=secondtriangle->deltaZ;//board1
 
-
-            if(serial->isOpen()){
+            int a,g=0;
+            if(serial->isOpen() ){
                 serial->write(s.toStdString().c_str());
-                serial->flush();
-                if(serial->canReadLine()==true){
-                    QByteArray answer = serial->readLine();
-                    qDebug()<<answer.data();
-                    dlog->insertPlainText(answer.data());
-                }
-            }
+                dlog->insertPlainText("UP\n");
+                status=false;
+                while(serial->canReadLine()==false && g<5){
+                    serial->write(s.toStdString().c_str());
+                    QThread::sleep(1);
+                    g++;
+                    };
+                if(g>=4){
+                    dlog->insertPlainText("Time out\n");
+                    return;
+                    }
 
-        //ui->plainTextEdit->insertPlainText(s);
-        //ui->lcdL->display((double)(yPOS));
+                    {
+                    QByteArray answer = serial->readLine();
+                    if(a=strncmp ("ok",answer.data(),2)!=0 && g<200){
+                        answer = serial->readLine();
+                        dlog->insertPlainText(answer.data());
+
+                        g++;
+                        }
+
+                        else{
+                        dlog->insertPlainText(answer.data());
+                        status=true;
+                        }
+                    }
+                }
+                else
+                    dlog->insertPlainText("Back Not connected\n");
          angleL->display((double)(yPOS));
     }
 }
@@ -570,7 +600,7 @@ void MainWindow::yMoverU() //UP
 
 void MainWindow::yMoverD() //DOWN
 {
-    if(yPOS>0 && yPOS<65)    {
+    if(yPOS>0 && yPOS<65 )    {
 
         QString s= QString::number((float)yPOS);
         qDebug() << "In yMOverD ";
@@ -606,14 +636,39 @@ void MainWindow::yMoverD() //DOWN
         board1->deltaY=secondtriangle->deltaY;//board1
         board1->deltaZ=secondtriangle->deltaZ;//board
 
-        if(serial->isOpen()){
+        int a,g=0;
+        if(serial->isOpen() ){
             serial->write(s.toStdString().c_str());
-            serial->flush();
-            if(serial->canReadLine()==true){
-                QByteArray answer = serial->readLine(2);
-                printf("Answer %c",answer[0]);
+            dlog->insertPlainText("Down\n");
+            status=false;
+            while(serial->canReadLine()==false && g<5){
+                serial->write(s.toStdString().c_str());
+                QThread::sleep(1);
+                g++;
+                };
+            if(g>=4){
+                dlog->insertPlainText("Time out\n");
+                }
+
+                {
+                QByteArray answer = serial->readLine();
+                if(a=strncmp ("ok",answer.data(),2)!=0 && g<200){
+                    answer = serial->readLine();
+                    dlog->insertPlainText(answer.data());
+
+                    g++;
+                    }
+
+                    else{
+                    dlog->insertPlainText(answer.data());
+                    status=true;
+                    }
+                }
             }
-        }
+            else
+                dlog->insertPlainText("Back Not connected\n");
+
+        dlog->insertPlainText(s);
         /*try{
         ui->plainTextEdit->insertPlainText(s);
         ui->lcdL->display((double)(yPOS));
@@ -624,13 +679,12 @@ void MainWindow::yMoverD() //DOWN
     }
 }
 
-void MainWindow::xMoverU()  //FRONT , is right motor clock wise
+void MainWindow::xMoverU()  //Back , is right motor clock wise
 {
- if(xPOS<64 && xPOS>-58)   {
-        //xPOS=xPOS-1;
+ if(xPOS<64 && xPOS>-58 )   {
         float k;
         QString s= QString::number((float)xPOS);
-        qDebug()<< "In xMOverU ";
+
 
         s="pos X "+s+"\r";
         small_gear1->degree=-xPOS*ratio;
@@ -656,27 +710,51 @@ void MainWindow::xMoverU()  //FRONT , is right motor clock wise
         SG90holder->deltaY=secondtriangle->deltaY;
         SG90holder->deltaZ=secondtriangle->deltaZ;
 
-        if(serial->isOpen()){
+        int a,g=0;
+        if(serial->isOpen() ){
             serial->write(s.toStdString().c_str());
+            dlog->insertPlainText("Back\n");
+            status=false;
+            while(serial->canReadLine()==false && g<5){
+                serial->write(s.toStdString().c_str());
+                dlog->insertPlainText(s.toStdString().c_str());
+                QThread::sleep(1);
+                g++;
+                };
+            if(g>=4){
+                dlog->insertPlainText("Time out\n");
+                return ;
+                }
 
-            if(serial->canReadLine()==true){
+                {
                 QByteArray answer = serial->readLine();
-                qDebug()<<"asnsewr="<<answer.data();
-                dlog->insertPlainText(answer.data());
-            }
-        }
+                if(a=strncmp ("ok",answer.data(),2)!=0 && g<200){
+                    answer = serial->readLine();
+                    dlog->insertPlainText(answer.data());
 
-        //ui->plainTextEdit->insertPlainText(s);
+                    g++;
+                    }
+
+                    else{
+                    dlog->insertPlainText(answer.data());
+                    status=true;
+                    }
+                }
+            }
+            else
+                dlog->insertPlainText("Back Not connected\n");
+
+        dlog->insertPlainText(s);
         //ui->lcdR->display((double)(xPOS));
         angleR->display((double)(xPOS));
     }
 }
-void MainWindow::xMoverD() //BACK, is actually right motor anticlock wise
+void MainWindow::xMoverD() //Front, is actually right motor anticlock wise
 {
     if(xPOS<64 && xPOS>-58){
-        //xPOS=xPOS+1;
+
         QString s= QString::number((float)xPOS/1);
-        qDebug() << "In xMOverD ";
+        //qDebug() << "In xMOverD ";
         s="pos X "+s+"\r";
         small_gear1->degree=-xPOS*ratio;
         main_gear->degree=xPOS;
@@ -699,34 +777,51 @@ void MainWindow::xMoverD() //BACK, is actually right motor anticlock wise
         SG90holder->deltaY=secondtriangle->deltaY;
         SG90holder->deltaZ=secondtriangle->deltaZ;
 
-        if(serial->isOpen()){
-            serial->write(s.toStdString().c_str());
-            serial->flush();
-            if(serial->canReadLine()==true){
-                QByteArray answer = serial->readLine(2);
-                printf("Answer %c",answer[0]);
-            }
-        }
 
-        //ui->plainTextEdit->insertPlainText(s);
-        //ui->lcdR->display((double)(xPOS));
+        int a,g=0;
+        if(serial->isOpen() && status== true){
+            serial->write(s.toStdString().c_str());
+            dlog->insertPlainText("Front\n");
+            status=false;
+            while(serial->canReadLine()==false && g<5){
+                serial->write(s.toStdString().c_str());
+                QThread::sleep(1);
+                g++;
+                };
+            if(g>=4){
+                dlog->insertPlainText("Time out\n");
+                }
+
+                {
+                QByteArray answer = serial->readLine();
+                if(a=strncmp ("ok",answer.data(),2)!=0 && g<200){
+                    answer = serial->readLine();
+                    dlog->insertPlainText(answer.data());
+
+                    g++;
+                    }
+
+                    else{
+                    dlog->insertPlainText(answer.data());
+                    status=true;
+                    }
+                }
+            }
+            else
+                dlog->insertPlainText("Front Not connected\n");
+        dlog->insertPlainText(s);
+
+
         angleR->display((double)(xPOS));
     }
 }
 
 void MainWindow::zMoverU()
 {
-   // zPOS=zPOS-1;
+    {
     degreeZ=zPOS;
     QString s= QString::number((float)zPOS/1);
     s="pos Z "+s+"\r";
-
-    //if(serial->isOpen())
-    {
-        serial->write(s.toStdString().c_str());
-        }
-    //ui->lcdNumberY->display((double)(zPOS/10));
-
     small_gear2->degreeZ=degreeZ*ratio;
     Gear2->degreeZ=degreeZ;
     horizontal->degreeZ=degreeZ;
@@ -745,19 +840,52 @@ void MainWindow::zMoverU()
     main_gear->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90holder->degreeZ=upper_triangle->degreeZ=degreeZ;
-    //ui->lcdZ->display((double)(zPOS));
+
+    int a,g=0;
+    if(serial->isOpen() && status== true){
+        serial->write(s.toStdString().c_str());
+        dlog->insertPlainText("left\n");
+        status=false;
+        while(serial->canReadLine()==false && g<5){
+            serial->write(s.toStdString().c_str());
+            QThread::sleep(1);
+            g++;
+            };
+        if(g>=4){
+            dlog->insertPlainText("Time out\n");
+            }
+
+            {
+            QByteArray answer = serial->readLine();
+            if(a=strncmp ("ok",answer.data(),2)!=0 && g<200){
+                answer = serial->readLine();
+                dlog->insertPlainText(answer.data());
+
+                g++;
+                }
+
+                else{
+                dlog->insertPlainText(answer.data());
+                status=true;
+                }
+            }
+        }
+        else
+            dlog->insertPlainText("Left Not connected\n");
+    dlog->insertPlainText(s);
+
+
+
     angleZ->display((double)(zPOS));
+    }
 }
 
 void MainWindow::zMoverD() //Moves the object around Z
 {
+    if(status==true){
     degreeZ=zPOS;
     QString s= QString::number((float)zPOS);
     s="pos Z "+s+"\r";
-    if(serial->isOpen()){
-       serial->write(s.toStdString().c_str());
-       }
-    // ui->lcdNumberY->display((double)(zPOS));
 
     small_gear2->degreeZ=degreeZ;
     Gear2->degreeZ=degreeZ;;
@@ -779,15 +907,49 @@ void MainWindow::zMoverD() //Moves the object around Z
     SG90->degreeZ=upper_triangle->degreeZ=degreeZ;
     SG90holder->degreeZ=upper_triangle->degreeZ=degreeZ;
 
-   // ui->lcdZ->display((double)(zPOS));
+    int a,g=0;
+    if(serial->isOpen() ){
+        serial->write(s.toStdString().c_str());
+        dlog->insertPlainText("Right\n");
+        status=false;
+        while(serial->canReadLine()==false && g<5){
+            serial->write(s.toStdString().c_str());
+            QThread::sleep(1);
+            g++;
+            };
+        if(g>=4){
+            dlog->insertPlainText("Time out\n");
+
+            return;
+            }
+
+            {
+            QByteArray answer = serial->readLine();
+            if(a=strncmp ("ok",answer.data(),2)!=0 && g<200){
+                answer = serial->readLine();
+                dlog->insertPlainText(answer.data());
+
+                g++;
+                }
+
+                else{
+                dlog->insertPlainText(answer.data());
+                status=true;
+                }
+            }
+        }
+        else
+            dlog->insertPlainText("Rigth Not connected\n");
+    dlog->insertPlainText(s);
     angleZ->display((double)(zPOS));
+    }
  }
 
 void MainWindow::updateg()//ler
 {
     static float j=0;
     static float h=0;
-    static float k=0;
+
     float delta=0.5;
     float jforward=1.05;
     float jbackward=0.95;
@@ -851,7 +1013,6 @@ void MainWindow::updateg2()
     if(serial->isOpen()){
     serial->write(s.toStdString().c_str());
     }
-    //ui->lcdNumberY->display((double)(zPOS/10));
 
 
 }
@@ -869,7 +1030,7 @@ void MainWindow::calculate()// From the button to set an initial position
    l=12;
    a1=0;b1=12;c1=12;
 
-   float x0,y0,z0,a1,b1,c1,t,x1,y1,z1,m1;//http://tutorial.math.lamar.edu/Classes/CalcIII/EqnsOfLines.aspx
+   float x0,y0,z0,a1,b1,c1,t,m1;//http://tutorial.math.lamar.edu/Classes/CalcIII/EqnsOfLines.aspx
 
    //Old values are stored in X0 variables
    x0=(float) X1;
@@ -947,16 +1108,8 @@ void MainWindow::calculate()// From the button to set an initial position
            }
            else
               y0=(float) Y1;
-
-
-
-           qDebug()<<"m= "<<m;
-
-
-           zMoverD();
-
-           //ui->lcdNumberY->display((double)(xPOS));
-
+          qDebug()<<"m= "<<m;
+           zMoverD();  
        }
    }
    else
@@ -1447,10 +1600,7 @@ void MainWindow::calcular(float x, float y , float z){
 
     t=(x-x0)/a1;//parametrizaion
 
-   /* qDebug()<<"a= "<<a1;
-    qDebug()<<"b= "<<b1;
-    qDebug()<<"c= "<<c1;
-    qDebug()<<"t= "<<t;*/
+
 
     if(t>0){
         for(m1=0;m1<1.01;m1=m1+0.01)
@@ -1509,8 +1659,7 @@ void MainWindow::calcular(float x, float y , float z){
             x=x0+a1*m1;
             y=y0+b1*m1;
             z=z0+c1*m1;
-           // qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
-           // QThread::msleep(5);
+
 
             X1=x;
             Y1=y;
@@ -1577,15 +1726,6 @@ void MainWindow::moving(float x, float y , float z){
 
     t=(x-x0)/a1;//parametrizaion
 
-   /* qDebug()<<"a= "<<a1;
-    qDebug()<<"b= "<<b1;
-    qDebug()<<"c= "<<c1;
-    qDebug()<<"t= "<<t;*/
-   /* x=x0+a1*m1;
-    y=y0+b1*m1;
-    z=z0+c1*m1;*/
-    //qDebug()<<"x= "<<x<<" y= "<<y<<" z= "<<z<<"m1= "<<m1;
-
     X1=x;
     Y1=y;
     Z1=z;
@@ -1633,7 +1773,6 @@ void MainWindow::on_frontview_clicked()
 void MainWindow::on_topview_clicked()
 {
     rtopview    =   true;
-
 }
 
 void MainWindow::RMACW(){//Front button

@@ -234,52 +234,38 @@ Serial.println(yvalue);
 
 void positioner(int arg_cnt,char **args)//pos
 {
- 
   xvalue = atof(args[1]);
   yvalue = atof(args[2]);
- // uArm(xvalue,yvalue);
+
  if(strcmp(args[1],"X")==0)
-   if(stepper3.distanceToGo()==0)  //right motor
-            {
-              stepper3.moveTo(yvalue*microstepsG/360);
-              Serial.println("ok");
-              return;
-            }
- if(strcmp(args[1],"Y")==0)
-   if(stepper2.distanceToGo()==0) //left motor
-          {
-              stepper2.moveTo(yvalue*microstepsG/360);
-              Serial.println("ok");
-              return;
-          }
- if(strcmp(args[1],"Z")==0)
-   if(stepper1.distanceToGo()==0)
     {
-              stepper1.moveTo(-yvalue*microstepsG/360);
-               Serial.println("ok");
-               return;
+      while(stepper3.distanceToGo()!=0){
+        Serial.print("Distance to Go x: ");
+        Serial.println(stepper3.distanceToGo());
+        }
+      stepper3.moveTo(yvalue*microstepsG/360);
+      Serial.println("ok");
+     
     }
- if(strcmp(args[1],"G")==0)
-          {
-              myservo.write((int)yvalue);
-              Serial.println("ok");              
-              return;
-          }    
- if(strcmp(args[1],"W")==0)
-  {
-              myservo.write(yvalue);
-              Serial.print((int)yvalue);  
-               Serial.println("ok");
-               return;
-  }
- if(strcmp(args[1],"S")==0)
- {
-              myservo.write((int)yvalue);  
-              Serial.print(yvalue);           
-               Serial.println("ok");
-               return;
- }
-Serial.print("nok");
+ if(strcmp(args[1],"Y")==0)
+    {
+      while(stepper2.distanceToGo()!=0){
+        Serial.print("y");
+        }
+      stepper2.moveTo(yvalue*microstepsG/360);
+      Serial.println("ok");
+      
+    }
+ if(strcmp(args[1],"Z")==0)
+    {
+      while(stepper1.distanceToGo()!=0){
+        Serial.print("z");
+        }
+      stepper1.moveTo(yvalue*microstepsG/360);
+      Serial.println("ok");
+      
+    }
+
   }
 
 void mover(int arg_cnt,char **args)

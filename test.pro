@@ -26,7 +26,8 @@ SOURCES += main.cpp\
     bad.cpp \
     joystick.cpp \
     helper.cpp \
-    camino.cpp
+    camino.cpp \
+    serial.cpp
 
 HEADERS  += mainwindow.h \
     glwidget.h \
@@ -36,7 +37,8 @@ HEADERS  += mainwindow.h \
     helper.h \
     camino.h \
     uarm.h \
-    uarmext.h
+    uarmext.h \
+    serial.h
 
 FORMS    += mainwindow.ui
 
